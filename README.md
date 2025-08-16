@@ -27,13 +27,15 @@ Build a comprehensive search system that handles all query patterns:
 - **Trigram Search**: Match exact terms AND handle typos with pg_trgm
 - **Hybrid Fusion**: Combine results with reciprocal rank scoring
 - **ML Reranking**: Optimize relevance with Cohere Rerank v3.5
+- **Temporal Analysis**: Filter by time periods to identify seasonal patterns
 
-### Interactive Search Widget
+### Interactive Search with Temporal Pattern Analysis
 Test your hybrid search with a fully-featured widget that includes:
-- Real-time weight adjustment (semantic vs trigram)
-- Team and severity filters
-- Sample queries with typos
-- Result interpretation guide for Black Friday preparation
+- **Time-based filtering**: Preset ranges (Black Friday Week, November, Q4) or custom dates
+- **Real-time weight adjustment**: Balance semantic vs trigram matching
+- **Team and severity filters**: Focus on specific perspectives
+- **Temporal insights**: Identify peak-event patterns and seasonal correlations
+- **Enhanced score interpretation**: Understand why lower scores still matter
 
 ## 🎮 The Scenario
 
@@ -41,20 +43,22 @@ Your e-commerce platform faces Black Friday in 28 days. You have:
 - 📊 1,500 logs from 365 days of operations
 - 👥 4 engineering teams with different perspectives
 - 🔍 Same incidents described differently by each team
+- 📅 Historical patterns from previous peak events
 
 **The Challenge**: Different teams describe the same problem differently:
 - DBA: "FATAL: remaining connection slots are reserved"
 - Developer: "HikariPool-1 - Connection timeout after 30000ms"
 - SRE: "CloudWatch: DatabaseConnections crossed 990"
 
-**Your Mission**: Build hybrid search that finds ALL these variations to prevent future incidents.
+**Your Mission**: Build hybrid search that finds ALL these variations and reveals temporal patterns to prevent future incidents.
 
 ## 🛠️ Workshop Structure
 
 ```
 sample-dat409-hybrid-search-workshop/
 ├── notebooks/
-│   └── dat409_notebook.ipynb       # Main workshop notebook
+│   ├── dat409_notebook.ipynb       # Main workshop notebook
+│   └── requirements.txt             # Python dependencies
 ├── data/
 │   └── incident_logs.json          # 1,500 engineering logs
 ├── code/
@@ -87,10 +91,12 @@ Misses: Exact incident where ratio = 72%
 **Hybrid Search Success:**
 ```python
 Query: "connection exhaustion issues"
+Time Range: "Black Friday Week"
 Returns: 
   - Exact matches (trigram)
   - Typos handled (trigram fuzzy)
   - Related concepts (semantic)
+  - Temporal patterns from peak periods
   - Both specific metrics AND patterns
 ```
 
@@ -100,6 +106,13 @@ Returns:
 - **0.8-1.0**: Nearly identical incidents - study these first
 - **0.6-0.8**: Highly related patterns - same root cause, different description
 - **0.4-0.6**: Conceptually related - may reveal cascade effects
+- **0.2-0.4**: Peripheral matches - valuable for understanding broader incident landscape
+
+### Temporal Patterns
+- **Black Friday Week**: High-traffic incident patterns
+- **November/December**: Seasonal peak behaviors
+- **Q4**: Quarter-wide trends and recurring issues
+- **Custom Ranges**: Analyze specific periods of interest
 
 ### Action Items by Severity
 - 🔴 **Critical**: Create runbooks and automated alerts
@@ -145,6 +158,7 @@ The notebook automatically loads 1,500 incident logs with:
 - Multiple engineering perspectives
 - Severity distributions
 - Black Friday correlation patterns
+- Temporal markers for seasonal analysis
 
 ## 📈 Performance Optimizations
 
@@ -152,14 +166,16 @@ The notebook automatically loads 1,500 incident logs with:
 - **Batch embeddings**: 96 texts per API call
 - **HNSW indexing**: Fast approximate nearest neighbor search
 - **GIN trigram index**: Efficient fuzzy matching
+- **Temporal indexing**: Quick date-range filtering
 - **Deduplication**: Smart content hashing
-- **Single display**: Prevents UI duplication
+- **Connection recovery**: Automatic reconnection handling
 
 ### Production Considerations
 - Use read replicas for search workloads
 - Implement query result caching
 - Monitor with Performance Insights
 - Scale for concurrent users
+- Partition by date for large datasets
 
 ## 🎯 Learning Outcomes
 
@@ -169,16 +185,19 @@ After completing this workshop:
    - Combine trigram and semantic effectively
    - Handle typos, exact matches, and concepts
    - Implement smart weight detection
+   - Add temporal filtering for pattern analysis
 
 2. **Optimize for Scale**
    - Batch API calls efficiently
-   - Create proper indexes
-   - Handle metadata filtering
+   - Create proper indexes including temporal
+   - Handle metadata and date filtering
+   - Implement connection pooling
 
 3. **Apply to Black Friday**
-   - Identify incident patterns
-   - Create preventive playbooks
+   - Identify seasonal incident patterns
+   - Create time-aware preventive playbooks
    - Enable cross-team insights
+   - Build proactive monitoring based on historical data
 
 ## 📖 Technologies Used
 
@@ -188,6 +207,7 @@ After completing this workshop:
 - **Cohere Embed v3**: State-of-art embeddings
 - **Cohere Rerank v3.5**: ML relevance optimization
 - **Amazon Bedrock**: Managed model access
+- **Jupyter Widgets**: Interactive search interface
 
 ## 🤝 Support & Resources
 
