@@ -211,7 +211,7 @@ After completing this workshop:
 
 ## 🤝 Support & Resources
 
-- **Workshop Issues**: [GitHub Issues](https://github.com/aws-samples/sample-dat409-hybrid-search-workshop/issues)
+- **Workshop Issues**: [GitHub Issues](https://github.com/aws-samples/sample-dat409-hybrid-search-aurora-mcp/issues)
 - **Documentation**: [pgvector](https://github.com/pgvector/pgvector) | [Aurora](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/)
 - **Model Context Protocol**: [MCP Specification](https://modelcontextprotocol.io/)
 
