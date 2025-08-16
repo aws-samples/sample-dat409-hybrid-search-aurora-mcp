@@ -1,221 +1,204 @@
-# DAT409 | Implement hybrid search with Aurora PostgreSQL for MCP retrieval
-
-🚀 **AWS re:Invent 2025 Builder's Session**
-
-Build a production-ready hybrid search system that combines PostgreSQL trigram search, pgvector semantic search, and Cohere reranking to enable Model Context Protocol (MCP) style retrieval patterns.
-
-**GitHub Repository**: https://github.com/aws-samples/sample-dat409-hybrid-search-workshop
+# DAT409 | Hybrid Search with Aurora PostgreSQL for MCP Retrieval
 
 ## 🎯 The Black Friday Playbook
 
-Transform a year of engineering observations into actionable intelligence for peak events. Learn how different engineering teams (DBAs, SREs, Developers, Data Engineers) describe the same incidents differently, and build a search system that connects these perspectives.
+Transform a year of engineering observations into actionable intelligence for peak events. Build a production-ready hybrid search system that combines semantic understanding with trigram matching, enabling teams to surface critical patterns from historical incidents.
 
-## 📚 What You'll Learn
+## 🚀 Quick Start for Workshop Participants
 
-- **PostgreSQL Full-Text Search with pg_trgm**: Handle typos, abbreviations, and partial matches
-- **Semantic Search with pgvector**: Find conceptually similar incidents across teams
-- **Hybrid Search Strategies**: Combine multiple search methods with intelligent weighting
-- **Cohere Reranking via Amazon Bedrock**: Improve result relevance by 20-30%
-- **MCP-style Structured Retrieval**: Build context-aware search with persona and temporal filters
-- **Performance Optimization**: Choose the right search strategy for different query types
+### Your Environment is Ready!
 
-## 🏗️ Architecture
+If you're attending the workshop at re:Invent, everything is pre-configured:
+- ✅ Aurora PostgreSQL with pgvector and pg_trgm extensions
+- ✅ Jupyter notebooks with all dependencies
+- ✅ 1,500 incident logs from 365 days of operations
+- ✅ Amazon Bedrock with Cohere models enabled
+
+**Just three steps:**
+1. Open your Workshop Studio URL
+2. Navigate to port 8888 (Jupyter)
+3. Open `/workshop/notebooks/dat409_notebook.ipynb`
+
+## 📚 What You'll Build
+
+### Production Hybrid Search System (45 min)
+Build a comprehensive search system that handles all query patterns:
+- **Semantic Search**: Find conceptually similar incidents using Cohere Embed v3
+- **Trigram Search**: Match exact terms AND handle typos with pg_trgm
+- **Hybrid Fusion**: Combine results with reciprocal rank scoring
+- **ML Reranking**: Optimize relevance with Cohere Rerank v3.5
+
+### Interactive Search Widget
+Test your hybrid search with a fully-featured widget that includes:
+- Real-time weight adjustment (semantic vs trigram)
+- Team and severity filters
+- Sample queries with typos
+- Result interpretation guide for Black Friday preparation
+
+## 🎮 The Scenario
+
+Your e-commerce platform faces Black Friday in 28 days. You have:
+- 📊 1,500 logs from 365 days of operations
+- 👥 4 engineering teams with different perspectives
+- 🔍 Same incidents described differently by each team
+
+**The Challenge**: Different teams describe the same problem differently:
+- DBA: "FATAL: remaining connection slots are reserved"
+- Developer: "HikariPool-1 - Connection timeout after 30000ms"
+- SRE: "CloudWatch: DatabaseConnections crossed 990"
+
+**Your Mission**: Build hybrid search that finds ALL these variations to prevent future incidents.
+
+## 🛠️ Workshop Structure
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│                 │     │                  │     │                 │
-│  Jupyter        │────▶│  Aurora          │────▶│  Amazon         │
-│  Notebook       │     │  PostgreSQL      │     │  Bedrock        │
-│                 │     │  (pgvector +     │     │  (Cohere)       │
-└─────────────────┘     │   pg_trgm)       │     └─────────────────┘
-                        └──────────────────┘
+sample-dat409-hybrid-search-workshop/
+├── notebooks/
+│   └── dat409_notebook.ipynb       # Main workshop notebook
+├── data/
+│   └── incident_logs.json          # 1,500 engineering logs
+├── code/
+│   └── incident_logs_generator.py  # Dataset generator
+├── scripts/
+│   └── setup_database.sql         # Database initialization
+└── infrastructure/
+    ├── dat409-hybrid-search.yaml  # CloudFormation template
+    └── contentspec.yaml           # Workshop Studio config
 ```
+
+## 💡 Key Learning Points
+
+### Why Hybrid Search Matters
+
+**Pure Trigram Search Limitations:**
+```python
+Query: "connection exhaustion issues"
+Returns: Only exact phrase matches
+Misses: "pool saturation", "threading bottleneck"
+```
+
+**Pure Semantic Search Limitations:**
+```python
+Query: "buffer_cache_hit_ratio anomaly"
+Returns: Generic "performance issues"
+Misses: Exact incident where ratio = 72%
+```
+
+**Hybrid Search Success:**
+```python
+Query: "connection exhaustion issues"
+Returns: 
+  - Exact matches (trigram)
+  - Typos handled (trigram fuzzy)
+  - Related concepts (semantic)
+  - Both specific metrics AND patterns
+```
+
+## 📊 Understanding Your Results
+
+### Relevance Score Interpretation
+- **0.8-1.0**: Nearly identical incidents - study these first
+- **0.6-0.8**: Highly related patterns - same root cause, different description
+- **0.4-0.6**: Conceptually related - may reveal cascade effects
+
+### Action Items by Severity
+- 🔴 **Critical**: Create runbooks and automated alerts
+- 🟡 **Warning**: Set up proactive monitoring thresholds
+- 🔵 **Info**: Understand normal vs abnormal patterns
+
+### Methods Column
+- **"trigram, semantic"**: Found by both = highest confidence
+- **"trigram only"**: Exact keyword/error code match
+- **"semantic only"**: Different terminology, same concept
 
 ## 🚦 Prerequisites
 
-- AWS Account with Amazon Bedrock access (Cohere models enabled)
-- Basic knowledge of PostgreSQL and Python
-- Familiarity with vector databases (helpful but not required)
+- **Required**: AWS Account with Bedrock access
+- **Required**: Laptop with modern browser
+- **Helpful**: Basic Python and SQL knowledge
 
-## 📂 Workshop Studio Structure vs GitHub Repository
+## 🔧 Self-Paced Setup
 
-### Workshop Studio Assets (S3):
-```
-static/
-├── dat409-hybrid-search.yaml        # Unified CFN template
-└── iam_policy.json                  # IAM policy for participants
-```
+If running independently:
 
-### GitHub Repository (Public):
-```
-sample-dat409-hybrid-search-workshop/
-├── README.md                         # This file
-├── LICENSE                          # MIT-0 License
-├── notebooks/
-│   ├── workshop_notebook.ipynb      # Main workshop notebook (enhanced version)
-│   └── requirements.txt              # Python dependencies
-├── code/
-│   ├── search_utils.py              # Reusable search functions
-│   ├── mcp_patterns.py              # MCP implementation patterns
-│   └── streamlit_app.py             # Interactive dashboard (bonus module)
-├── data/
-│   ├── incident_logs.json           # Sample engineering logs (1 year of data)
-│   └── sample_queries.json          # Example search queries for testing
-├── scripts/
-│   ├── setup_database.sql           # Database initialization
-│   ├── create_indexes.sql           # Index creation scripts
-│   └── load_sample_data.py          # Data loading utility
-├── solutions/
-│   └── complete_notebook.ipynb      # Full solution reference
-└── .env.example                      # Environment variables template
-```
-
-## 🚀 Quick Start (Workshop Participants)
-
-If you're attending the workshop at re:Invent, your environment is pre-configured with our automated bootstrap! 
-
-### What's Already Done For You:
-✅ Aurora PostgreSQL 17.5 with pgvector and pg_trgm extensions  
-✅ Jupyter Lab running on port 8888  
-✅ All Python packages installed  
-✅ GitHub repository cloned to `/workshop`  
-✅ Database credentials configured  
-✅ Environment variables set  
-
-### Just Three Steps:
-1. Open the Code Editor URL provided by your instructor
-2. Navigate to the Jupyter interface (port 8888)
-3. Open `/workshop/notebooks/workshop_notebook.ipynb` and follow along!
-
-## 💻 Self-Paced Setup
-
-Want to run this workshop on your own? Follow these steps:
-
-### 1. Clone the Repository
+### 1. Deploy Infrastructure
 ```bash
-git clone https://github.com/aws-samples/sample-dat409-hybrid-search-workshop.git
-cd sample-dat409-hybrid-search-workshop
-```
-
-### 2. Deploy Infrastructure
-Deploy the complete workshop stack with automated bootstrap:
-
-```bash
+# Use provided CloudFormation template
 aws cloudformation create-stack \
   --stack-name dat409-workshop \
-  --template-url https://workshop-assets-url/static/dat409-hybrid-search.yaml \
-  --parameters \
-    ParameterKey=AssetsBucketName,ParameterValue=your-bucket \
-    ParameterKey=AssetsBucketPrefix,ParameterValue=your-prefix/ \
+  --template-body file://infrastructure/dat409-hybrid-search.yaml \
+  --parameters ParameterKey=DBUsername,ParameterValue=workshop_admin \
   --capabilities CAPABILITY_NAMED_IAM
-
-# Wait for stack to complete (includes automatic bootstrap)
-aws cloudformation wait stack-create-complete --stack-name dat409-workshop
 ```
 
-The stack automatically:
-- Creates Aurora PostgreSQL 17.5 with I/O optimized storage
-- Launches Code Editor instance with Jupyter Lab
-- Clones the GitHub repository
-- Installs all dependencies
-- Configures database extensions
-- Sets up environment variables
-
-### 3. Set Up Your Environment
+### 2. Connect to Environment
 ```bash
-# Install Python dependencies
-pip install -r notebooks/requirements.txt
-
-# Set environment variables
-export DB_HOST=<your-aurora-endpoint>
-export DB_NAME=workshop_db
-export AWS_REGION=us-west-2
+# Get Jupyter URL from CloudFormation outputs
+aws cloudformation describe-stacks \
+  --stack-name dat409-workshop \
+  --query 'Stacks[0].Outputs[?OutputKey==`JupyterURL`].OutputValue' \
+  --output text
 ```
 
-### 4. Run the Notebook
-```bash
-jupyter lab notebooks/workshop_notebook.ipynb
-```
+### 3. Load Sample Data
+The notebook automatically loads 1,500 incident logs with:
+- Multiple engineering perspectives
+- Severity distributions
+- Black Friday correlation patterns
 
-## 📊 Sample Data
+## 📈 Performance Optimizations
 
-The workshop includes a year of simulated engineering logs from four different teams:
-- **DBAs**: Database performance metrics, vacuum processes, lock contention
-- **SREs**: Service health, response times, availability metrics
-- **Developers**: Application exceptions, query patterns, connection issues
-- **Data Engineers**: ETL pipeline health, data freshness, processing backlogs
+### Implemented in Workshop
+- **Batch embeddings**: 96 texts per API call
+- **HNSW indexing**: Fast approximate nearest neighbor search
+- **GIN trigram index**: Efficient fuzzy matching
+- **Deduplication**: Smart content hashing
+- **Single display**: Prevents UI duplication
 
-## 🔍 Search Methods Comparison
+### Production Considerations
+- Use read replicas for search workloads
+- Implement query result caching
+- Monitor with Performance Insights
+- Scale for concurrent users
 
-| Method | Best For | Speed | Example |
-|--------|----------|-------|---------|
-| **Trigram** | Typos, abbreviations | ~1-5ms | "db perf" → "database performance" |
-| **Semantic** | Conceptual similarity | ~50-200ms | "slow queries" → "high latency" |
-| **Full-text** | Exact phrases | ~5-10ms | Exact error messages |
-| **Hybrid** | Comprehensive search | ~100-300ms | Best of all methods |
+## 🎯 Learning Outcomes
 
-## 🎓 Learning Modules
+After completing this workshop:
 
-### Module 1: Understanding Your Data
-- Explore engineering logs from different personas
-- Understand how teams describe issues differently
+1. **Build Production Hybrid Search**
+   - Combine trigram and semantic effectively
+   - Handle typos, exact matches, and concepts
+   - Implement smart weight detection
 
-### Module 2: Database Setup
-- Configure Aurora PostgreSQL with pgvector
-- Enable pg_trgm for fuzzy matching
+2. **Optimize for Scale**
+   - Batch API calls efficiently
+   - Create proper indexes
+   - Handle metadata filtering
 
-### Module 3-6: Search Implementation
-- Build trigram, semantic, and full-text search
-- Combine into hybrid search with configurable weights
+3. **Apply to Black Friday**
+   - Identify incident patterns
+   - Create preventive playbooks
+   - Enable cross-team insights
 
-### Module 7-8: Advanced Techniques
-- Implement Cohere reranking
-- Add MCP-style contextual filters
+## 📖 Technologies Used
 
-### Module 9-10: Production Patterns
-- Create monitoring queries from historical patterns
-- Optimize performance for different use cases
+- **Aurora PostgreSQL 17**: Managed database with extensions
+- **pgvector**: Vector similarity search (1024 dimensions)
+- **pg_trgm**: Trigram matching for fuzzy search
+- **Cohere Embed v3**: State-of-art embeddings
+- **Cohere Rerank v3.5**: ML relevance optimization
+- **Amazon Bedrock**: Managed model access
 
-## 🏆 Key Takeaways
+## 🤝 Support & Resources
 
-After completing this workshop, you'll be able to:
-- ✅ Build production-ready hybrid search systems
-- ✅ Connect insights across different team perspectives
-- ✅ Prevent incidents by finding hidden patterns
-- ✅ Implement MCP-compatible retrieval patterns
-- ✅ Optimize search strategies for different query types
-
-## 📖 Additional Resources
-
-- [pgvector Documentation](https://github.com/pgvector/pgvector)
-- [PostgreSQL Full-Text Search](https://www.postgresql.org/docs/current/textsearch.html)
-- [Amazon Bedrock Cohere Models](https://docs.aws.amazon.com/bedrock/latest/userguide/cohere-models.html)
-- [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+- **Workshop Issues**: [GitHub Issues](https://github.com/aws-samples/sample-dat409-hybrid-search-workshop/issues)
+- **Documentation**: [pgvector](https://github.com/pgvector/pgvector) | [Aurora](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/)
+- **Model Context Protocol**: [MCP Specification](https://modelcontextprotocol.io/)
 
 ## 📄 License
 
-This sample code is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file.
-
-## 🙋 Questions?
-
-- Workshop issues: Open a GitHub issue
-- AWS Support: Contact through AWS Console
-- Community: Post in AWS Developer Forums
-
-## 🌟 Show Your Support
-
-If you found this workshop helpful:
-- ⭐ Star this repository
-- 🍴 Fork for your own experiments
-- 👁️ Watch for updates
-- 📢 Share with your team
+This sample code is licensed under the MIT-0 License.
 
 ---
 
-**Built with ❤️ by AWS Database Specialists**
-
-#reInvent2025 #HybridSearch #AuroraPostgreSQL #MCP
+**Built with ❤️ by AWS Database Specialists for re:Invent 2025**
