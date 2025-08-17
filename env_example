@@ -1,7 +1,5 @@
-# .env.example
-DB_HOST=your-aurora-cluster.amazonaws.com
-DB_PORT=5432
-DB_NAME=workshop
+DB_HOST=apgpg-pgvector.cluster-chygmprofdnr.us-west-2.rds.amazonaws.com
+DB_NAME=postgres
 DB_USER=postgres
-DB_PASSWORD=your-password-here
-AWS_REGION=us-west-2
+DB_PASSWORD=your_password_here
+DB_PORT=5432
