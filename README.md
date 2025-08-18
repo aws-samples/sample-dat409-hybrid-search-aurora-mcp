@@ -45,4 +45,4 @@ python3 agent/strands_agent.py
 **The Black Friday Playbook**: Transform engineering observations into actionable intelligence for peak events.
 
 ---
-Built with ❤️ by AWS Database Specialists for re:Invent 2025
+Built with ❤️ by AWS Database Specialists
