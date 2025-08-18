@@ -32,33 +32,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Function to find and load .env file (without Streamlit calls)
+# Function to find and load .env file (simplified for root location)
 def find_and_load_env():
-    """Find .env file in various locations"""
+    """Find .env file - prioritizing workshop root"""
     if load_dotenv is None:
         return False, None
     
+    # Minimal locations - prioritize workshop root
     possible_locations = [
-        Path('.env'),  # Current directory
-        Path('../.env'),  # Parent directory
-        Path('../../.env'),  # Two levels up
-        Path('../../../.env'),  # Three levels up
-        Path('../setup/.env'),  # In sibling setup folder
-        Path('../../setup/.env'),  # In setup folder from nested location
-        Path('../lab2-mcp-agent/setup/.env'),  # Full path from scripts
-        Path('setup/.env'),  # In child setup folder
-        Path('/workshop/.env'),  # Workshop environment
-        Path('/workshop/setup/.env'),  # Workshop setup folder
-        Path('/workshop/lab2-mcp-agent/setup/.env'),  # Full workshop path
-        Path.home() / '.env',  # Home directory
-        Path.home() / 'workshop' / '.env',  # Home workshop
-        Path.home() / 'workshop' / 'setup' / '.env',  # Home workshop setup
+        Path('/workshop/.env'),  # Primary location in workshop
+        Path('../../.env'),  # Two levels up (if running from lab2-mcp-agent/dashboard)
+        Path('.env'),  # Current directory fallback
     ]
-    
-    # Also check environment variable for custom path
-    env_file_path = os.getenv('ENV_FILE_PATH')
-    if env_file_path:
-        possible_locations.insert(0, Path(env_file_path))
     
     for location in possible_locations:
         if location.exists():
@@ -181,21 +166,18 @@ class BlackFridayDashboard:
             st.sidebar.success("✅ Configuration loaded")
         else:
             st.sidebar.warning("⚠️ No .env file found. Using environment variables or manual input.")
-            with st.sidebar.expander("💡 Help: Where to place .env file"):
+            with st.sidebar.expander("💡 Help: Configuration"):
                 st.markdown("""
-                The dashboard searched these locations:
-                - Current directory
-                - Parent directories (../, ../../)
-                - Setup folder (../setup/.env)
-                - Workshop paths (/workshop/.env)
+                The dashboard expects the .env file at:
+                **`/workshop/.env`**
                 
-                **Options:**
-                1. Place your .env file in one of these locations
-                2. Set ENV_FILE_PATH environment variable:
-                   ```bash
-                   export ENV_FILE_PATH=/path/to/your/.env
-                   ```
-                3. Enter connection details manually below
+                Please ensure your .env file contains:
+                - DB_HOST
+                - DB_NAME
+                - DB_USER
+                - DB_PASSWORD
+                
+                Or enter connection details manually below.
                 """)
         
         # Try to get database connection details from environment
@@ -209,7 +191,7 @@ class BlackFridayDashboard:
         if not all([self.db_host, self.db_name, self.db_user, self.db_password]):
             st.sidebar.header("🔧 Database Configuration")
             if not env_loaded:
-                st.sidebar.info("Enter connection details manually or create a .env file")
+                st.sidebar.info("Enter connection details manually or check /workshop/.env")
             
             self.db_host = st.sidebar.text_input(
                 "Database Host", 
