@@ -44,7 +44,7 @@ log "Password: ${CODE_EDITOR_PASSWORD:0:4}****"
 # Update system and install base packages
 log "Installing base packages..."
 dnf update -y
-dnf install -y curl gnupg whois argon2 unzip nginx openssl jq git wget
+dnf install --skip-broken -y curl gnupg whois argon2 unzip nginx openssl jq git wget
 check_success "Base packages installation"
 
 # Create user
