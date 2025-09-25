@@ -44,8 +44,11 @@ log "Password: ${CODE_EDITOR_PASSWORD:0:4}****"
 # Update system and install base packages
 log "Installing base packages..."
 dnf update -y
-dnf install --skip-broken -y curl gnupg whois argon2 unzip nginx openssl jq git wget
+dnf install --skip-broken -y curl gnupg whois argon2 unzip nginx openssl jq git wget python3.13 python3.13-pip python3.13-setuptools python3.13-devel python3.13-wheel python3.13-tkinter
 check_success "Base packages installation"
+
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 1
+sudo update-alternatives --set python3 /usr/bin/python3.13
 
 # Create user
 log "Setting up user: $CODE_EDITOR_USER"
