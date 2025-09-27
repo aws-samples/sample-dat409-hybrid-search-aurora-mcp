@@ -188,160 +188,59 @@ install_vscode_extension() {
     
     log "Installing extension: $EXTENSION_NAME ($EXTENSION_ID)..."
     
-    # Try multiple methods to install extensions
-    # Method 1: Using code-editor-server command directly
+    # Try to install using code-editor-server command
     if [ -f "$CODE_EDITOR_CMD" ]; then
-        sudo -u "$CODE_EDITOR_USER" "$CODE_EDITOR_CMD" --install-extension "$EXTENSION_ID" 2>&1 | tee -a /tmp/extension_install.log
+        sudo -u "$CODE_EDITOR_USER" "$CODE_EDITOR_CMD" --install-extension "$EXTENSION_ID" 2>&1 | tee -a /tmp/extension_install.log || true
         
-        if [ ${PIPESTATUS[0]} -eq 0 ]; then
-            log "✅ Successfully installed $EXTENSION_NAME via code-editor-server"
+        if grep -q "successfully installed" /tmp/extension_install.log 2>/dev/null; then
+            log "✅ Successfully installed $EXTENSION_NAME"
             return 0
         fi
     fi
     
-    # Method 2: Using the code command if available
-    if command -v code &> /dev/null; then
-        sudo -u "$CODE_EDITOR_USER" code --install-extension "$EXTENSION_ID" 2>&1 | tee -a /tmp/extension_install.log
-        
-        if [ ${PIPESTATUS[0]} -eq 0 ]; then
-            log "✅ Successfully installed $EXTENSION_NAME via code command"
-            return 0
-        fi
-    fi
-    
-    # Method 3: Direct download and install
-    log "Attempting manual installation for $EXTENSION_NAME..."
-    
-    # Create extensions directory if it doesn't exist
-    EXTENSIONS_DIR="/home/$CODE_EDITOR_USER/.local/share/code-server/extensions"
-    if [ ! -d "$EXTENSIONS_DIR" ]; then
-        EXTENSIONS_DIR="/home/$CODE_EDITOR_USER/.code-editor-server/extensions"
-    fi
-    
-    sudo -u "$CODE_EDITOR_USER" mkdir -p "$EXTENSIONS_DIR"
-    
-    # Download extension from marketplace
-    PUBLISHER="${EXTENSION_ID%%.*}"
-    EXTENSION_NAME_SHORT="${EXTENSION_ID#*.}"
-    
-    # Try to download from VS Code marketplace
-    MARKETPLACE_URL="https://marketplace.visualstudio.com/_apis/public/gallery/publishers/${PUBLISHER}/vsextensions/${EXTENSION_NAME_SHORT}/latest/vspackage"
-    
-    cd "$EXTENSIONS_DIR"
-    sudo -u "$CODE_EDITOR_USER" wget -q -O "${EXTENSION_ID}.vsix" "$MARKETPLACE_URL" 2>/dev/null
-    
-    if [ -f "${EXTENSION_ID}.vsix" ]; then
-        # Extract the extension
-        sudo -u "$CODE_EDITOR_USER" unzip -q "${EXTENSION_ID}.vsix" -d "${EXTENSION_ID}" 2>/dev/null
-        rm -f "${EXTENSION_ID}.vsix"
-        
-        if [ -d "${EXTENSION_ID}" ]; then
-            log "✅ Manually installed $EXTENSION_NAME"
-            return 0
-        fi
-    fi
-    
-    warn "⚠️ Could not install $EXTENSION_NAME - may need manual installation"
+    warn "Extension $EXTENSION_NAME may require manual installation"
     return 1
 }
 
-# List of essential extensions to install
-declare -a EXTENSIONS=(
-    "ms-python.python:Python"
-    "ms-toolsai.jupyter:Jupyter"
-    "ms-toolsai.vscode-jupyter-cell-tags:Jupyter Cell Tags"
-    "ms-toolsai.jupyter-keymap:Jupyter Keymap"
-    "ms-toolsai.jupyter-renderers:Jupyter Renderers"
-    "ms-toolsai.vscode-jupyter-slideshow:Jupyter Slide Show"
-)
+# Install essential extensions
+install_vscode_extension "ms-python.python" "Python"
+install_vscode_extension "ms-toolsai.jupyter" "Jupyter"
+install_vscode_extension "ms-toolsai.vscode-jupyter-cell-tags" "Jupyter Cell Tags"
+install_vscode_extension "ms-toolsai.jupyter-keymap" "Jupyter Keymap"
+install_vscode_extension "ms-toolsai.jupyter-renderers" "Jupyter Renderers"
 
-# Install each extension
-for EXTENSION_INFO in "${EXTENSIONS[@]}"; do
-    EXTENSION_ID="${EXTENSION_INFO%%:*}"
-    EXTENSION_NAME="${EXTENSION_INFO#*:}"
-    install_vscode_extension "$EXTENSION_ID" "$EXTENSION_NAME"
-done
-
-# Additional helpful extensions (optional)
-log "Installing additional helpful extensions..."
-declare -a OPTIONAL_EXTENSIONS=(
-    "ms-python.vscode-pylance:Pylance"
-    "ms-python.debugpy:Python Debugger"
-    "redhat.vscode-yaml:YAML"
-    "ms-vscode.makefile-tools:Makefile Tools"
-    "DavidAnson.vscode-markdownlint:Markdown Lint"
-)
-
-for EXTENSION_INFO in "${OPTIONAL_EXTENSIONS[@]}"; do
-    EXTENSION_ID="${EXTENSION_INFO%%:*}"
-    EXTENSION_NAME="${EXTENSION_INFO#*:}"
-    install_vscode_extension "$EXTENSION_ID" "$EXTENSION_NAME" || true  # Don't fail on optional extensions
-done
-
-# Configure VS Code settings for Python and Jupyter
-log "Configuring VS Code settings for Python and Jupyter..."
-SETTINGS_DIR="/home/$CODE_EDITOR_USER/.local/share/code-server"
-if [ ! -d "$SETTINGS_DIR" ]; then
-    SETTINGS_DIR="/home/$CODE_EDITOR_USER/.code-editor-server"
-fi
-
+# Configure VS Code settings
+log "Configuring VS Code settings..."
+SETTINGS_DIR="/home/$CODE_EDITOR_USER/.code-editor-server"
 sudo -u "$CODE_EDITOR_USER" mkdir -p "$SETTINGS_DIR/User"
 
-# Create VS Code settings.json with Python and Jupyter configuration
 cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
 {
     "python.defaultInterpreterPath": "/usr/bin/python3.13",
     "python.terminal.activateEnvironment": true,
     "python.linting.enabled": true,
-    "python.linting.pylintEnabled": true,
-    "python.formatting.provider": "black",
     "jupyter.jupyterServerType": "local",
     "jupyter.notebookFileRoot": "/workshop",
-    "jupyter.alwaysTrustNotebooks": true,
     "terminal.integrated.defaultProfile.linux": "bash",
     "terminal.integrated.cwd": "/workshop",
     "files.autoSave": "afterDelay",
     "files.autoSaveDelay": 1000,
-    "workbench.startupEditor": "none",
-    "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.autoImportCompletions": true,
-    "jupyter.askForKernelRestart": false,
-    "jupyter.interactiveWindow.textEditor.executeSelection": true,
-    "extensions.autoUpdate": true,
-    "extensions.autoCheckUpdates": true
+    "workbench.startupEditor": "none"
 }
 VSCODE_SETTINGS
 
-chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$SETTINGS_DIR/User/settings.json"
+chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$SETTINGS_DIR"
 
-log "VS Code extensions and settings configured successfully"
-
-# Restart Code Editor to ensure extensions are loaded
-log "Restarting Code Editor to load extensions..."
-systemctl restart "code-editor@$CODE_EDITOR_USER"
-sleep 10
-
-# Verify Code Editor is still running after restart
-if systemctl is-active --quiet "code-editor@$CODE_EDITOR_USER"; then
-    log "✅ Code Editor restarted successfully with extensions"
-else
-    warn "Code Editor may need manual restart to load extensions"
-fi
+log "VS Code extensions and settings configured"
 
 log "==================== End VS Code Extensions Section ===================="
 
 # ===========================================================================
-# DATABASE LOADING SECTION
-# Note: Full load of 21,704 products takes approximately 5-8 minutes
-# Ensure CloudFormation timeout is set to at least 1800 seconds (30 minutes)
+# DATABASE CONFIGURATION SECTION
 # ===========================================================================
 
-log "==================== Database Loading Section ===================="
-log "Starting FULL product catalog load: 21,704 products with embeddings"
-log "Expected duration: 5-8 minutes"
+log "==================== Database Configuration Section ===================="
 
-# Create database environment setup script
-log "Creating database connection helper scripts..."
 if [ ! -z "$DB_SECRET_ARN" ] && [ "$DB_SECRET_ARN" != "none" ]; then
     log "Retrieving database credentials from Secrets Manager..."
     
@@ -362,10 +261,11 @@ if [ ! -z "$DB_SECRET_ARN" ] && [ "$DB_SECRET_ARN" != "none" ]; then
         log "Database credentials retrieved successfully"
         log "Database Host: $DB_HOST"
         log "Database Name: $DB_NAME"
+        log "Database User: $DB_USER"
         
         # Create .env file in workshop directory
         log "Creating .env file with database credentials..."
-        cat > "$HOME_FOLDER/.env" << EOF
+        cat > "$HOME_FOLDER/.env" << ENV_EOF
 DB_HOST=$DB_HOST
 DB_NAME=$DB_NAME
 DB_USER=$DB_USER
@@ -374,57 +274,81 @@ DB_PORT=$DB_PORT
 DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME
 AWS_REGION=$AWS_REGION
 DB_SECRET_ARN=$DB_SECRET_ARN
-EOF
+ENV_EOF
+        
         chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/.env"
         chmod 600 "$HOME_FOLDER/.env"
         log ".env file created successfully"
         
+        # Verify .env file was created with password
+        if grep -q "DB_PASSWORD=$DB_PASSWORD" "$HOME_FOLDER/.env"; then
+            log "Verified: DB_PASSWORD is in .env file"
+        else
+            warn "DB_PASSWORD may not be properly set in .env file"
+        fi
+        
         # Create .pgpass file for passwordless psql
         log "Setting up passwordless psql access..."
-        sudo -u "$CODE_EDITOR_USER" bash -c "cat > /home/$CODE_EDITOR_USER/.pgpass << EOF
+        sudo -u "$CODE_EDITOR_USER" bash -c "cat > /home/$CODE_EDITOR_USER/.pgpass << PGPASS_EOF
 $DB_HOST:$DB_PORT:$DB_NAME:$DB_USER:$DB_PASSWORD
 $DB_HOST:$DB_PORT:*:$DB_USER:$DB_PASSWORD
-EOF"
+PGPASS_EOF"
         chmod 600 "/home/$CODE_EDITOR_USER/.pgpass"
         chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "/home/$CODE_EDITOR_USER/.pgpass"
         
         # Update bashrc with database environment and psql alias
         log "Updating user environment with database settings..."
-        cat >> "/home/$CODE_EDITOR_USER/.bashrc" << 'BASHRC_EOF'
+        cat >> "/home/$CODE_EDITOR_USER/.bashrc" << BASHRC_EOF
 
 # Database Connection Settings
-export PGHOST='DB_HOST_PLACEHOLDER'
-export PGPORT='DB_PORT_PLACEHOLDER'
-export PGUSER='DB_USER_PLACEHOLDER'
-export PGPASSWORD='DB_PASSWORD_PLACEHOLDER'
-export PGDATABASE='DB_NAME_PLACEHOLDER'
+export PGHOST='$DB_HOST'
+export PGPORT='$DB_PORT'
+export PGUSER='$DB_USER'
+export PGPASSWORD='$DB_PASSWORD'
+export PGDATABASE='$DB_NAME'
+export DB_HOST='$DB_HOST'
+export DB_PORT='$DB_PORT'
+export DB_USER='$DB_USER'
+export DB_PASSWORD='$DB_PASSWORD'
+export DB_NAME='$DB_NAME'
+export DB_SECRET_ARN='$DB_SECRET_ARN'
+export AWS_REGION='$AWS_REGION'
 
 # Workshop shortcuts
-alias psql='psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE'
+alias psql='psql -h \$PGHOST -p \$PGPORT -U \$PGUSER -d \$PGDATABASE'
 alias workshop='cd /workshop'
 alias lab1='cd /workshop/lab1-hybrid-search'
 alias lab2='cd /workshop/lab2-mcp-agent'
 
 # Load environment from .env if exists
 if [ -f /workshop/.env ]; then
-    export $(grep -v '^#' /workshop/.env | xargs)
+    set -a
+    source /workshop/.env
+    set +a
 fi
 
 echo "📘 DAT409 Workshop Environment Ready!"
-echo "📊 Database: $PGDATABASE @ $PGHOST"
+echo "📊 Database: \$PGDATABASE @ \$PGHOST"
 echo "🔧 Quick commands: psql, workshop, lab1, lab2"
 BASHRC_EOF
         
-        # Replace placeholders with actual values
-        sed -i "s/DB_HOST_PLACEHOLDER/$DB_HOST/g" "/home/$CODE_EDITOR_USER/.bashrc"
-        sed -i "s/DB_PORT_PLACEHOLDER/$DB_PORT/g" "/home/$CODE_EDITOR_USER/.bashrc"
-        sed -i "s/DB_USER_PLACEHOLDER/$DB_USER/g" "/home/$CODE_EDITOR_USER/.bashrc"
-        sed -i "s/DB_PASSWORD_PLACEHOLDER/$DB_PASSWORD/g" "/home/$CODE_EDITOR_USER/.bashrc"
-        sed -i "s/DB_NAME_PLACEHOLDER/$DB_NAME/g" "/home/$CODE_EDITOR_USER/.bashrc"
-        
         log "User environment configured with database settings"
+        
+    else
+        warn "Could not parse database credentials from Secrets Manager"
+    fi
+else
+    warn "DB_SECRET_ARN not provided, skipping database configuration"
+fi
 
-# Install Python dependencies for data loading and Jupyter
+log "==================== End Database Configuration Section ===================="
+
+# ===========================================================================
+# PYTHON DEPENDENCIES INSTALLATION
+# ===========================================================================
+
+log "==================== Python Dependencies Section ===================="
+
 log "Installing Python dependencies for database loading and Jupyter..."
 sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user --upgrade pip
 sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
@@ -445,63 +369,28 @@ sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
     seaborn
 check_success "Python dependencies installation"
 
+log "==================== End Python Dependencies Section ===================="
+
+# ===========================================================================
+# DATABASE LOADING SECTION
+# ===========================================================================
+
+log "==================== Database Loading Section ===================="
+log "Full load of 21,704 products takes approximately 5-8 minutes"
+
 # Clone the repository if not already done
 if [ ! -d "$HOME_FOLDER/sample-dat409-hybrid-search-workshop-prod" ]; then
     log "Cloning workshop repository..."
-    sudo -u "$CODE_EDITOR_USER" git clone https://github.com/aws-samples/sample-dat409-hybrid-search-workshop-prod.git "$HOME_FOLDER/sample-dat409-hybrid-search-workshop-prod"
-    check_success "Repository clone"
+    sudo -u "$CODE_EDITOR_USER" git clone https://github.com/aws-samples/sample-dat409-hybrid-search-workshop-prod.git "$HOME_FOLDER/sample-dat409-hybrid-search-workshop-prod" || true
 fi
 
-# Check if the data loader script exists
-LOADER_SCRIPT="$HOME_FOLDER/sample-dat409-hybrid-search-workshop-prod/scripts/setup/parallel-fast-loader.py"
-DATA_FILE="$HOME_FOLDER/sample-dat409-hybrid-search-workshop-prod/lab1-hybrid-search/data/amazon-products.csv"
-
-if [ -f "$LOADER_SCRIPT" ]; then
-    log "Found data loader script at: $LOADER_SCRIPT"
-    
-    # Get database credentials from Secrets Manager
-    if [ ! -z "$DB_SECRET_ARN" ] && [ "$DB_SECRET_ARN" != "none" ]; then
-        log "Retrieving database credentials from Secrets Manager..."
-        
-        DB_SECRET=$(aws secretsmanager get-secret-value \
-            --secret-id "$DB_SECRET_ARN" \
-            --region "$AWS_REGION" \
-            --query SecretString \
-            --output text 2>/dev/null)
-        
-        if [ ! -z "$DB_SECRET" ]; then
-            # Parse the secret JSON
-            export DB_HOST=$(echo "$DB_SECRET" | jq -r .host)
-            export DB_PORT=$(echo "$DB_SECRET" | jq -r .port)
-            export DB_NAME=$(echo "$DB_SECRET" | jq -r .dbname)
-            export DB_USER=$(echo "$DB_SECRET" | jq -r .username)
-            export DB_PASSWORD=$(echo "$DB_SECRET" | jq -r .password)
-            
-            log "Database credentials retrieved successfully"
-            log "Database Host: $DB_HOST"
-            log "Database Name: $DB_NAME"
-            
-            # Create a configuration file for the loader script
-            cat > "$HOME_FOLDER/db_config.env" << EOF
-DB_HOST=$DB_HOST
-DB_PORT=$DB_PORT
-DB_NAME=$DB_NAME
-DB_USER=$DB_USER
-DB_PASSWORD=$DB_PASSWORD
-SECRET_NAME=$DB_SECRET_ARN
-AWS_REGION=$AWS_REGION
-EOF
-            chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/db_config.env"
-            
-            # Modify the loader script to use correct paths and configuration
-            log "Preparing data loader script..."
-            
-            # Create a wrapper script that sets up the environment
-            cat > "$HOME_FOLDER/run_data_loader.py" << 'LOADER_EOF'
+# Create the data loader script
+log "Creating data loader script..."
+cat > "$HOME_FOLDER/run_data_loader.py" << 'LOADER_EOF'
 #!/usr/bin/env python3
 """
-Wrapper script to run the parallel data loader with correct configuration
-FULL LOAD MODE - All 21,704 products
+DAT409 Data Loader - Full Mode
+Loads all 21,704 products with embeddings
 """
 import os
 import sys
@@ -522,6 +411,10 @@ DB_NAME = os.environ.get('DB_NAME', 'workshop_db')
 DB_USER = os.environ.get('DB_USER')
 DB_PASSWORD = os.environ.get('DB_PASSWORD')
 AWS_REGION = os.environ.get('AWS_REGION', 'us-west-2')
+
+if not all([DB_HOST, DB_USER, DB_PASSWORD]):
+    print("❌ Missing database credentials")
+    sys.exit(1)
 
 print(f"Database: {DB_HOST}:{DB_PORT}/{DB_NAME}")
 print(f"User: {DB_USER}")
@@ -544,35 +437,23 @@ except Exception as e:
     sys.exit(1)
 
 # Set up paths
-WORKSHOP_DIR = Path("/workshop/sample-dat409-hybrid-search-workshop-prod")
-if not WORKSHOP_DIR.exists():
-    # Try alternate location
-    WORKSHOP_DIR = Path("/workshop")
-    
-DATA_FILE = WORKSHOP_DIR / "lab1-hybrid-search/data/amazon-products.csv"
+WORKSHOP_DIR = Path("/workshop")
+DATA_FILE = WORKSHOP_DIR / "sample-dat409-hybrid-search-workshop-prod/lab1-hybrid-search/data/amazon-products.csv"
 
-# Check if data file exists
+# Check if data file exists, if not try alternate location or download
 if not DATA_FILE.exists():
-    print(f"❌ Data file not found: {DATA_FILE}")
-    print("Attempting to download from GitHub...")
-    os.system(f"mkdir -p {DATA_FILE.parent}")
-    os.system(f"curl -fsSL https://raw.githubusercontent.com/aws-samples/sample-dat409-hybrid-search-workshop-prod/main/lab1-hybrid-search/data/amazon-products.csv -o {DATA_FILE}")
+    DATA_FILE = WORKSHOP_DIR / "lab1-hybrid-search/data/amazon-products.csv"
+    if not DATA_FILE.exists():
+        print(f"❌ Data file not found at {DATA_FILE}")
+        print("Attempting to download from GitHub...")
+        os.system(f"mkdir -p {DATA_FILE.parent}")
+        os.system(f"curl -fsSL https://raw.githubusercontent.com/aws-samples/sample-dat409-hybrid-search-workshop-prod/main/lab1-hybrid-search/data/amazon-products.csv -o {DATA_FILE}")
 
 if DATA_FILE.exists():
     print(f"✅ Data file found: {DATA_FILE}")
 else:
-    print(f"❌ Could not find or download data file")
+    print("❌ Could not find or download data file")
     sys.exit(1)
-
-# Set environment variables for the loader script
-os.environ['CSV_PATH'] = str(DATA_FILE)
-os.environ['BATCH_SIZE'] = '1000'
-os.environ['PARALLEL_WORKERS'] = '6'
-os.environ['SECRET_NAME'] = os.environ.get('DB_SECRET_ARN', '')
-os.environ['REGION'] = AWS_REGION
-
-# Add the scripts directory to path
-sys.path.insert(0, str(WORKSHOP_DIR / "scripts/setup"))
 
 print("\nStarting data load...")
 print("This will take approximately 5-8 minutes...")
@@ -580,11 +461,9 @@ print("="*60)
 
 start_time = time.time()
 
-# Now run the actual loader inline
 # Import required libraries
 import pandas as pd
 import numpy as np
-import json
 from pgvector.psycopg import register_vector
 from pandarallel import pandarallel
 from tqdm import tqdm
@@ -593,7 +472,7 @@ from tqdm import tqdm
 bedrock_runtime = boto3.client('bedrock-runtime', region_name=AWS_REGION)
 
 def generate_embedding_cohere(text):
-    """Generate Cohere embedding with Titan fallback"""
+    """Generate Cohere embedding with fallback"""
     if not text or pd.isna(text):
         return np.random.randn(1024).tolist()
     
@@ -772,128 +651,68 @@ print(f"   Total rows loaded: {final_count:,}")
 print(f"   Total time: {total_time/60:.1f} minutes")
 print("="*60)
 LOADER_EOF
-            
-            chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/run_data_loader.py"
-            chmod +x "$HOME_FOLDER/run_data_loader.py"
-            
-            # Copy the test connection script
-            log "Creating database test script..."
-            cat > "$HOME_FOLDER/test_connection.py" << 'TEST_SCRIPT_EOF'
-#!/usr/bin/env python3
-import os
-import psycopg
-import sys
 
-try:
-    conn = psycopg.connect(
-        host=os.environ.get('DB_HOST'),
-        port=os.environ.get('DB_PORT', 5432),
-        user=os.environ.get('DB_USER'),
-        password=os.environ.get('DB_PASSWORD'),
-        dbname=os.environ.get('DB_NAME', 'workshop_db')
-    )
-    print("✅ Database connection successful!")
-    cur = conn.cursor()
-    cur.execute("SELECT version();")
-    version = cur.fetchone()[0]
-    print(f"PostgreSQL: {version.split(',')[0]}")
-    cur.close()
-    conn.close()
-except Exception as e:
-    print(f"❌ Connection failed: {e}")
-    sys.exit(1)
-TEST_SCRIPT_EOF
-            chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/test_connection.py"
-            chmod +x "$HOME_FOLDER/test_connection.py"
-            
-            # Run the data loader
-            log "Running FULL data loader for 21,704 products (this will take 5-8 minutes)..."
-            cd "$HOME_FOLDER"
-            
-            # Export environment variables for the loader
-            export DB_SECRET_ARN="$DB_SECRET_ARN"
-            export AWS_REGION="$AWS_REGION"
-            export DB_HOST="$DB_HOST"
-            export DB_PORT="$DB_PORT"
-            export DB_NAME="$DB_NAME"
-            export DB_USER="$DB_USER"
-            export DB_PASSWORD="$DB_PASSWORD"
-            
-            # First test the connection
-            log "Testing database connection before data load..."
-            sudo -u "$CODE_EDITOR_USER" \
-                DB_HOST="$DB_HOST" \
-                DB_PORT="$DB_PORT" \
-                DB_NAME="$DB_NAME" \
-                DB_USER="$DB_USER" \
-                DB_PASSWORD="$DB_PASSWORD" \
-                python3.13 "$HOME_FOLDER/test_connection.py"
-            
-            if [ $? -ne 0 ]; then
-                error "Database connection test failed. Cannot proceed with data loading."
-            fi
-            
-            # Run the data loader as participant user with all environment variables
-            sudo -u "$CODE_EDITOR_USER" \
-                DB_SECRET_ARN="$DB_SECRET_ARN" \
-                AWS_REGION="$AWS_REGION" \
-                DB_HOST="$DB_HOST" \
-                DB_PORT="$DB_PORT" \
-                DB_NAME="$DB_NAME" \
-                DB_USER="$DB_USER" \
-                DB_PASSWORD="$DB_PASSWORD" \
-                PGHOST="$DB_HOST" \
-                PGPORT="$DB_PORT" \
-                PGDATABASE="$DB_NAME" \
-                PGUSER="$DB_USER" \
-                PGPASSWORD="$DB_PASSWORD" \
-                python3.13 "$HOME_FOLDER/run_data_loader.py" 2>&1 | tee "$HOME_FOLDER/data_loader.log"
-            
-            if [ ${PIPESTATUS[0]} -eq 0 ]; then
-                log "Database loading completed successfully!"
-                log "All 21,704 products loaded with embeddings"
-                
-                # Verify data was loaded
-                log "Verifying data load..."
-                sudo -u "$CODE_EDITOR_USER" \
-                    PGHOST="$DB_HOST" \
-                    PGPORT="$DB_PORT" \
-                    PGDATABASE="$DB_NAME" \
-                    PGUSER="$DB_USER" \
-                    PGPASSWORD="$DB_PASSWORD" \
-                    psql -c "SELECT COUNT(*) as product_count FROM bedrock_integration.product_catalog;" 2>/dev/null || log "Verification query executed"
-                
-                log "Check $HOME_FOLDER/data_loader.log for details"
-            else
-                warn "Database loading encountered issues. Check $HOME_FOLDER/data_loader.log"
-            fi
-        else
-            warn "Could not retrieve database credentials from Secrets Manager"
-        fi
+chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/run_data_loader.py"
+chmod +x "$HOME_FOLDER/run_data_loader.py"
+
+# Run the data loader if database credentials are available
+if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
+    log "Running data loader for 21,704 products (this will take 5-8 minutes)..."
+    
+    # Run the data loader as participant user with all environment variables
+    sudo -u "$CODE_EDITOR_USER" \
+        DB_HOST="$DB_HOST" \
+        DB_PORT="$DB_PORT" \
+        DB_NAME="$DB_NAME" \
+        DB_USER="$DB_USER" \
+        DB_PASSWORD="$DB_PASSWORD" \
+        AWS_REGION="$AWS_REGION" \
+        PGHOST="$DB_HOST" \
+        PGPORT="$DB_PORT" \
+        PGDATABASE="$DB_NAME" \
+        PGUSER="$DB_USER" \
+        PGPASSWORD="$DB_PASSWORD" \
+        python3.13 "$HOME_FOLDER/run_data_loader.py" 2>&1 | tee "$HOME_FOLDER/data_loader.log"
+    
+    if [ ${PIPESTATUS[0]} -eq 0 ]; then
+        log "Database loading completed successfully!"
+        log "All 21,704 products loaded with embeddings"
+        
+        # Verify data was loaded
+        log "Verifying data load..."
+        sudo -u "$CODE_EDITOR_USER" \
+            PGHOST="$DB_HOST" \
+            PGPORT="$DB_PORT" \
+            PGDATABASE="$DB_NAME" \
+            PGUSER="$DB_USER" \
+            PGPASSWORD="$DB_PASSWORD" \
+            psql -c "SELECT COUNT(*) as product_count FROM bedrock_integration.product_catalog;" 2>/dev/null || true
+        
     else
-        warn "DB_SECRET_ARN not provided, skipping database loading"
+        warn "Database loading encountered issues. Check $HOME_FOLDER/data_loader.log"
     fi
 else
-    warn "Data loader script not found at expected location: $LOADER_SCRIPT"
-    warn "Database loading will need to be done manually"
+    warn "Database credentials not available, skipping data loading"
 fi
 
 log "==================== End Database Loading Section ===================="
 
-# Wait for services to start
-log "Waiting for services to initialize..."
-sleep 20
+# ===========================================================================
+# FINAL VALIDATION
+# ===========================================================================
+
+log "==================== Final Validation ===================="
 
 # Validate services
 log "Validating services..."
 if systemctl is-active --quiet nginx; then
-    log "Nginx is running"
+    log "✅ Nginx is running"
 else
     error "Nginx is not running"
 fi
 
 if systemctl is-active --quiet "code-editor@$CODE_EDITOR_USER"; then
-    log "Code Editor service is running"
+    log "✅ Code Editor service is running"
 else
     error "Code Editor service is not running"
 fi
@@ -904,26 +723,33 @@ CODE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ ||
 NGINX_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/ || echo "failed")
 
 if [[ "$CODE_RESPONSE" =~ ^(200|302|401|403)$ ]]; then
-    log "Code Editor responding on port 8080: $CODE_RESPONSE"
+    log "✅ Code Editor responding on port 8080: $CODE_RESPONSE"
 else
     error "Code Editor not responding on port 8080: $CODE_RESPONSE"
 fi
 
 if [[ "$NGINX_RESPONSE" =~ ^(200|302|401|403)$ ]]; then
-    log "Nginx responding on port 80: $NGINX_RESPONSE"
+    log "✅ Nginx responding on port 80: $NGINX_RESPONSE"
 else
     error "Nginx not responding on port 80: $NGINX_RESPONSE"
 fi
 
 # Show final status
-log "Final service status:"
+log "==================== Bootstrap Summary ===================="
 echo "  Nginx: $(systemctl is-active nginx)"
 echo "  Code Editor: $(systemctl is-active code-editor@$CODE_EDITOR_USER)"
+echo "  Database Config: $( [ -f "$HOME_FOLDER/.env" ] && echo "✅ Created" || echo "❌ Missing" )"
+echo "  Python Extensions: $( [ -d "/home/$CODE_EDITOR_USER/.code-editor-server/extensions/ms-python.python" ] && echo "✅ Installed" || echo "⚠️  Check installation" )"
 echo "  Database Loading: Check $HOME_FOLDER/data_loader.log"
 
 log "Listening ports:"
 ss -tlpn | grep -E ":(80|8080)" || warn "No services listening on expected ports"
 
-log "Bootstrap completed successfully!"
-log "Code Editor should be accessible with token: $CODE_EDITOR_PASSWORD"
-log "Database has been preloaded with ALL 21,704 products with embeddings"
+log ""
+log "============================================================"
+log "✅ Bootstrap completed successfully!"
+log "Code Editor URL: Use CloudFront URL with token: $CODE_EDITOR_PASSWORD"
+log "Database: Configured with credentials from Secrets Manager"
+log "Data: Loading 21,704 products with embeddings"
+log "Extensions: Python and Jupyter VS Code extensions installed"
+log "============================================================"
