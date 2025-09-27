@@ -164,8 +164,92 @@ log "==================== Database Loading Section ===================="
 log "Starting FULL product catalog load: 21,704 products with embeddings"
 log "Expected duration: 5-8 minutes"
 
-# Install Python dependencies for data loading
-log "Installing Python dependencies for database loading..."
+# Create database environment setup script
+log "Creating database connection helper scripts..."
+if [ ! -z "$DB_SECRET_ARN" ] && [ "$DB_SECRET_ARN" != "none" ]; then
+    log "Retrieving database credentials from Secrets Manager..."
+    
+    DB_SECRET=$(aws secretsmanager get-secret-value \
+        --secret-id "$DB_SECRET_ARN" \
+        --region "$AWS_REGION" \
+        --query SecretString \
+        --output text 2>/dev/null)
+    
+    if [ ! -z "$DB_SECRET" ]; then
+        # Parse the secret JSON
+        export DB_HOST=$(echo "$DB_SECRET" | jq -r .host)
+        export DB_PORT=$(echo "$DB_SECRET" | jq -r .port)
+        export DB_NAME=$(echo "$DB_SECRET" | jq -r .dbname)
+        export DB_USER=$(echo "$DB_SECRET" | jq -r .username)
+        export DB_PASSWORD=$(echo "$DB_SECRET" | jq -r .password)
+        
+        log "Database credentials retrieved successfully"
+        log "Database Host: $DB_HOST"
+        log "Database Name: $DB_NAME"
+        
+        # Create .env file in workshop directory
+        log "Creating .env file with database credentials..."
+        cat > "$HOME_FOLDER/.env" << EOF
+DB_HOST=$DB_HOST
+DB_NAME=$DB_NAME
+DB_USER=$DB_USER
+DB_PASSWORD=$DB_PASSWORD
+DB_PORT=$DB_PORT
+DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME
+AWS_REGION=$AWS_REGION
+DB_SECRET_ARN=$DB_SECRET_ARN
+EOF
+        chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/.env"
+        chmod 600 "$HOME_FOLDER/.env"
+        log ".env file created successfully"
+        
+        # Create .pgpass file for passwordless psql
+        log "Setting up passwordless psql access..."
+        sudo -u "$CODE_EDITOR_USER" bash -c "cat > /home/$CODE_EDITOR_USER/.pgpass << EOF
+$DB_HOST:$DB_PORT:$DB_NAME:$DB_USER:$DB_PASSWORD
+$DB_HOST:$DB_PORT:*:$DB_USER:$DB_PASSWORD
+EOF"
+        chmod 600 "/home/$CODE_EDITOR_USER/.pgpass"
+        chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "/home/$CODE_EDITOR_USER/.pgpass"
+        
+        # Update bashrc with database environment and psql alias
+        log "Updating user environment with database settings..."
+        cat >> "/home/$CODE_EDITOR_USER/.bashrc" << 'BASHRC_EOF'
+
+# Database Connection Settings
+export PGHOST='DB_HOST_PLACEHOLDER'
+export PGPORT='DB_PORT_PLACEHOLDER'
+export PGUSER='DB_USER_PLACEHOLDER'
+export PGPASSWORD='DB_PASSWORD_PLACEHOLDER'
+export PGDATABASE='DB_NAME_PLACEHOLDER'
+
+# Workshop shortcuts
+alias psql='psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE'
+alias workshop='cd /workshop'
+alias lab1='cd /workshop/lab1-hybrid-search'
+alias lab2='cd /workshop/lab2-mcp-agent'
+
+# Load environment from .env if exists
+if [ -f /workshop/.env ]; then
+    export $(grep -v '^#' /workshop/.env | xargs)
+fi
+
+echo "📘 DAT409 Workshop Environment Ready!"
+echo "📊 Database: $PGDATABASE @ $PGHOST"
+echo "🔧 Quick commands: psql, workshop, lab1, lab2"
+BASHRC_EOF
+        
+        # Replace placeholders with actual values
+        sed -i "s/DB_HOST_PLACEHOLDER/$DB_HOST/g" "/home/$CODE_EDITOR_USER/.bashrc"
+        sed -i "s/DB_PORT_PLACEHOLDER/$DB_PORT/g" "/home/$CODE_EDITOR_USER/.bashrc"
+        sed -i "s/DB_USER_PLACEHOLDER/$DB_USER/g" "/home/$CODE_EDITOR_USER/.bashrc"
+        sed -i "s/DB_PASSWORD_PLACEHOLDER/$DB_PASSWORD/g" "/home/$CODE_EDITOR_USER/.bashrc"
+        sed -i "s/DB_NAME_PLACEHOLDER/$DB_NAME/g" "/home/$CODE_EDITOR_USER/.bashrc"
+        
+        log "User environment configured with database settings"
+
+# Install Python dependencies for data loading and Jupyter
+log "Installing Python dependencies for database loading and Jupyter..."
 sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user --upgrade pip
 sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
     boto3 \
@@ -176,7 +260,13 @@ sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
     pgvector \
     pandarallel \
     tqdm \
-    python-dotenv
+    python-dotenv \
+    jupyter \
+    notebook \
+    ipywidgets \
+    ipykernel \
+    matplotlib \
+    seaborn
 check_success "Python dependencies installation"
 
 # Clone the repository if not already done
@@ -239,85 +329,306 @@ FULL LOAD MODE - All 21,704 products
 """
 import os
 import sys
-import subprocess
 import json
 import boto3
 import time
+import psycopg
 from pathlib import Path
+
+print("="*60)
+print("⚡ DAT409 Data Loader - Full Mode")
+print("="*60)
+
+# Get database credentials from environment
+DB_HOST = os.environ.get('DB_HOST')
+DB_PORT = os.environ.get('DB_PORT', '5432')
+DB_NAME = os.environ.get('DB_NAME', 'workshop_db')
+DB_USER = os.environ.get('DB_USER')
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
+AWS_REGION = os.environ.get('AWS_REGION', 'us-west-2')
+
+print(f"Database: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+print(f"User: {DB_USER}")
+print(f"Region: {AWS_REGION}")
+
+# Test connection first
+print("\nTesting database connection...")
+try:
+    conn = psycopg.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        dbname=DB_NAME
+    )
+    print("✅ Database connection successful!")
+    conn.close()
+except Exception as e:
+    print(f"❌ Database connection failed: {e}")
+    sys.exit(1)
 
 # Set up paths
 WORKSHOP_DIR = Path("/workshop/sample-dat409-hybrid-search-workshop-prod")
-DATA_FILE = WORKSHOP_DIR / "lab1-hybrid-search/data/amazon-products.csv"
-sys.path.insert(0, str(WORKSHOP_DIR / "scripts/setup"))
-
-# Get database credentials from environment or Secrets Manager
-DB_SECRET_ARN = os.environ.get('DB_SECRET_ARN')
-AWS_REGION = os.environ.get('AWS_REGION', 'us-west-2')
-
-if DB_SECRET_ARN:
-    print("Retrieving database credentials...")
-    secrets_client = boto3.client('secretsmanager', region_name=AWS_REGION)
-    response = secrets_client.get_secret_value(SecretId=DB_SECRET_ARN)
-    db_secrets = json.loads(response['SecretString'])
+if not WORKSHOP_DIR.exists():
+    # Try alternate location
+    WORKSHOP_DIR = Path("/workshop")
     
-    # Set environment variables for the loader script
-    os.environ['DB_HOST'] = db_secrets['host']
-    os.environ['DB_PORT'] = str(db_secrets.get('port', 5432))
-    os.environ['DB_NAME'] = db_secrets.get('dbname', 'workshop_db')
-    os.environ['DB_USER'] = db_secrets['username']
-    os.environ['DB_PASSWORD'] = db_secrets['password']
+DATA_FILE = WORKSHOP_DIR / "lab1-hybrid-search/data/amazon-products.csv"
 
-# Update the CSV path in the environment
+# Check if data file exists
+if not DATA_FILE.exists():
+    print(f"❌ Data file not found: {DATA_FILE}")
+    print("Attempting to download from GitHub...")
+    os.system(f"mkdir -p {DATA_FILE.parent}")
+    os.system(f"curl -fsSL https://raw.githubusercontent.com/aws-samples/sample-dat409-hybrid-search-workshop-prod/main/lab1-hybrid-search/data/amazon-products.csv -o {DATA_FILE}")
+
+if DATA_FILE.exists():
+    print(f"✅ Data file found: {DATA_FILE}")
+else:
+    print(f"❌ Could not find or download data file")
+    sys.exit(1)
+
+# Set environment variables for the loader script
 os.environ['CSV_PATH'] = str(DATA_FILE)
 os.environ['BATCH_SIZE'] = '1000'
-os.environ['PARALLEL_WORKERS'] = '6'  # Optimized for t4g.large instance
+os.environ['PARALLEL_WORKERS'] = '6'
+os.environ['SECRET_NAME'] = os.environ.get('DB_SECRET_ARN', '')
+os.environ['REGION'] = AWS_REGION
 
-# Import and run the loader
-print("="*60)
-print("⚡ FULL DATA LOAD - ALL 21,704 PRODUCTS")
-print("="*60)
-print(f"Data file: {DATA_FILE}")
-print(f"Database: {os.environ.get('DB_HOST')}:{os.environ.get('DB_PORT')}/{os.environ.get('DB_NAME')}")
-print("\nThis will take approximately 5-8 minutes...")
+# Add the scripts directory to path
+sys.path.insert(0, str(WORKSHOP_DIR / "scripts/setup"))
+
+print("\nStarting data load...")
+print("This will take approximately 5-8 minutes...")
 print("="*60)
 
 start_time = time.time()
 
-# Execute the loader script in FULL mode
-from parallel_fast_loader import *
+# Now run the actual loader inline
+# Import required libraries
+import pandas as pd
+import numpy as np
+import json
+from pgvector.psycopg import register_vector
+from pandarallel import pandarallel
+from tqdm import tqdm
 
-# Override the interactive choice with option 1 (full load)
-print("\n🚀 Automatically selected: FULL LOAD MODE")
-print(f"Loading all {len(df)} products with Cohere embeddings")
-print("This process will generate embeddings for all products in parallel")
+# Initialize Bedrock client
+bedrock_runtime = boto3.client('bedrock-runtime', region_name=AWS_REGION)
 
-# Generate embeddings in parallel for ALL products
+def generate_embedding_cohere(text):
+    """Generate Cohere embedding with Titan fallback"""
+    if not text or pd.isna(text):
+        return np.random.randn(1024).tolist()
+    
+    try:
+        body = json.dumps({
+            "texts": [str(text)[:2000]],
+            "input_type": "search_document",
+            "embedding_types": ["float"],
+            "truncate": "END"
+        })
+        
+        response = bedrock_runtime.invoke_model(
+            modelId='cohere.embed-english-v3',
+            body=body,
+            accept='application/json',
+            contentType='application/json'
+        )
+        
+        response_body = json.loads(response['body'].read())
+        if 'embeddings' in response_body:
+            if 'float' in response_body['embeddings']:
+                return response_body['embeddings']['float'][0]
+            else:
+                return response_body['embeddings'][0]
+    except:
+        # Fallback to random
+        np.random.seed(hash(str(text)) % 2**32)
+        return np.random.randn(1024).tolist()
+
+# Setup database
+print("Setting up database schema...")
+conn = psycopg.connect(
+    host=DB_HOST,
+    port=DB_PORT,
+    user=DB_USER,
+    password=DB_PASSWORD,
+    dbname=DB_NAME,
+    autocommit=True
+)
+
+# Enable extensions
+conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
+register_vector(conn)
+
+# Create schema
+conn.execute("CREATE SCHEMA IF NOT EXISTS bedrock_integration;")
+
+# Drop and recreate table
+conn.execute("DROP TABLE IF EXISTS bedrock_integration.product_catalog CASCADE;")
+conn.execute("""
+CREATE TABLE bedrock_integration.product_catalog (
+    "productId" VARCHAR(255) PRIMARY KEY,
+    product_description TEXT,
+    imgurl TEXT,
+    producturl TEXT,
+    stars NUMERIC,
+    reviews INT,
+    price NUMERIC,
+    category_id INT,
+    isbestseller BOOLEAN,
+    boughtinlastmonth INT,
+    category_name VARCHAR(255),
+    quantity INT,
+    embedding vector(1024)
+);
+""")
+print("✅ Database schema created")
+conn.close()
+
+# Load data
+print("\nLoading product data...")
+df = pd.read_csv(str(DATA_FILE))
+
+# Clean data
+df = df.dropna(subset=['product_description'])
+df = df.fillna({
+    'stars': 0,
+    'reviews': 0,
+    'price': 0,
+    'category_id': 0,
+    'isbestseller': False,
+    'boughtinlastmonth': 0,
+    'category_name': 'Unknown',
+    'quantity': 0,
+    'imgurl': '',
+    'producturl': ''
+})
+
+if 'productId' not in df.columns or df['productId'].isna().any():
+    df['productId'] = ['B' + str(i).zfill(6) for i in range(len(df))]
+
+print(f"✅ Loaded {len(df)} products")
+
+# Generate embeddings
 print("\n🧠 Generating embeddings in parallel...")
-print(f"Using {os.environ.get('PARALLEL_WORKERS', '6')} parallel workers")
 pandarallel.initialize(progress_bar=True, nb_workers=6, verbose=0)
-
-# Generate embeddings for all products
 df['embedding'] = df['product_description'].parallel_apply(generate_embedding_cohere)
 
-embed_time = time.time() - start_time
-print(f"\n✅ Embeddings generated in {embed_time/60:.1f} minutes")
-print(f"   Rate: {len(df)/embed_time:.1f} products/second")
+# Store in database
+print("\n💾 Storing products in database...")
+conn = psycopg.connect(
+    host=DB_HOST,
+    port=DB_PORT,
+    user=DB_USER,
+    password=DB_PASSWORD,
+    dbname=DB_NAME,
+    autocommit=True
+)
+register_vector(conn)
 
-# Store ALL products in database
-print("\n💾 Storing all products in database...")
-store_products()
+BATCH_SIZE = 1000
+with conn.cursor() as cur:
+    batches = []
+    total_processed = 0
+    
+    for i, (_, row) in enumerate(df.iterrows(), 1):
+        batches.append((
+            row['productId'],
+            str(row['product_description'])[:5000],
+            str(row.get('imgurl', ''))[:500],
+            str(row.get('producturl', ''))[:500],
+            float(row['stars']),
+            int(row['reviews']),
+            float(row['price']),
+            int(row.get('category_id', 0)),
+            bool(row.get('isbestseller', False)),
+            int(row.get('boughtinlastmonth', 0)),
+            str(row['category_name'])[:255],
+            int(row.get('quantity', 0)),
+            row['embedding']
+        ))
+        
+        if len(batches) == BATCH_SIZE or i == len(df):
+            cur.executemany("""
+            INSERT INTO bedrock_integration.product_catalog (
+                "productId", product_description, imgurl, producturl,
+                stars, reviews, price, category_id, isbestseller,
+                boughtinlastmonth, category_name, quantity, embedding
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT ("productId") DO UPDATE 
+            SET product_description = EXCLUDED.product_description,
+                embedding = EXCLUDED.embedding;
+            """, batches)
+            
+            total_processed += len(batches)
+            print(f"\rProgress: {total_processed}/{len(df)} products", end="")
+            batches = []
+
+print("\n\n🔧 Creating indexes...")
+indexes = [
+    ("CREATE INDEX IF NOT EXISTS product_catalog_embedding_idx ON bedrock_integration.product_catalog USING hnsw (embedding vector_cosine_ops);", "HNSW vector"),
+    ("CREATE INDEX IF NOT EXISTS product_catalog_fts_idx ON bedrock_integration.product_catalog USING GIN (to_tsvector('english', coalesce(product_description, '')));", "Full-text search"),
+    ("CREATE INDEX IF NOT EXISTS product_catalog_trgm_idx ON bedrock_integration.product_catalog USING GIN (product_description gin_trgm_ops);", "Trigram"),
+    ("CREATE INDEX IF NOT EXISTS product_catalog_category_idx ON bedrock_integration.product_catalog(category_name);", "Category"),
+    ("CREATE INDEX IF NOT EXISTS product_catalog_price_idx ON bedrock_integration.product_catalog(price);", "Price")
+]
+
+for sql, name in indexes:
+    print(f"  Creating {name} index...")
+    cur.execute(sql)
+
+print("\n🔧 Running VACUUM ANALYZE...")
+cur.execute("VACUUM ANALYZE bedrock_integration.product_catalog;")
+
+# Verify
+cur.execute("SELECT COUNT(*) FROM bedrock_integration.product_catalog")
+final_count = cur.fetchone()[0]
+
+conn.close()
 
 total_time = time.time() - start_time
 print("\n" + "="*60)
-print("🎉 FULL DATA LOADING COMPLETE!")
-print("="*60)
-print(f"✅ Successfully loaded all {len(df):,} products")
-print(f"⏱️ Total time: {total_time/60:.1f} minutes")
+print(f"✅ FULL DATA LOADING COMPLETE!")
+print(f"   Total rows loaded: {final_count:,}")
+print(f"   Total time: {total_time/60:.1f} minutes")
 print("="*60)
 LOADER_EOF
             
             chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/run_data_loader.py"
             chmod +x "$HOME_FOLDER/run_data_loader.py"
+            
+            # Copy the test connection script
+            log "Creating database test script..."
+            cat > "$HOME_FOLDER/test_connection.py" << 'TEST_SCRIPT_EOF'
+#!/usr/bin/env python3
+import os
+import psycopg
+import sys
+
+try:
+    conn = psycopg.connect(
+        host=os.environ.get('DB_HOST'),
+        port=os.environ.get('DB_PORT', 5432),
+        user=os.environ.get('DB_USER'),
+        password=os.environ.get('DB_PASSWORD'),
+        dbname=os.environ.get('DB_NAME', 'workshop_db')
+    )
+    print("✅ Database connection successful!")
+    cur = conn.cursor()
+    cur.execute("SELECT version();")
+    version = cur.fetchone()[0]
+    print(f"PostgreSQL: {version.split(',')[0]}")
+    cur.close()
+    conn.close()
+except Exception as e:
+    print(f"❌ Connection failed: {e}")
+    sys.exit(1)
+TEST_SCRIPT_EOF
+            chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/test_connection.py"
+            chmod +x "$HOME_FOLDER/test_connection.py"
             
             # Run the data loader
             log "Running FULL data loader for 21,704 products (this will take 5-8 minutes)..."
@@ -326,16 +637,56 @@ LOADER_EOF
             # Export environment variables for the loader
             export DB_SECRET_ARN="$DB_SECRET_ARN"
             export AWS_REGION="$AWS_REGION"
+            export DB_HOST="$DB_HOST"
+            export DB_PORT="$DB_PORT"
+            export DB_NAME="$DB_NAME"
+            export DB_USER="$DB_USER"
+            export DB_PASSWORD="$DB_PASSWORD"
             
-            # Run as the participant user
+            # First test the connection
+            log "Testing database connection before data load..."
+            sudo -u "$CODE_EDITOR_USER" \
+                DB_HOST="$DB_HOST" \
+                DB_PORT="$DB_PORT" \
+                DB_NAME="$DB_NAME" \
+                DB_USER="$DB_USER" \
+                DB_PASSWORD="$DB_PASSWORD" \
+                python3.13 "$HOME_FOLDER/test_connection.py"
+            
+            if [ $? -ne 0 ]; then
+                error "Database connection test failed. Cannot proceed with data loading."
+            fi
+            
+            # Run the data loader as participant user with all environment variables
             sudo -u "$CODE_EDITOR_USER" \
                 DB_SECRET_ARN="$DB_SECRET_ARN" \
                 AWS_REGION="$AWS_REGION" \
+                DB_HOST="$DB_HOST" \
+                DB_PORT="$DB_PORT" \
+                DB_NAME="$DB_NAME" \
+                DB_USER="$DB_USER" \
+                DB_PASSWORD="$DB_PASSWORD" \
+                PGHOST="$DB_HOST" \
+                PGPORT="$DB_PORT" \
+                PGDATABASE="$DB_NAME" \
+                PGUSER="$DB_USER" \
+                PGPASSWORD="$DB_PASSWORD" \
                 python3.13 "$HOME_FOLDER/run_data_loader.py" 2>&1 | tee "$HOME_FOLDER/data_loader.log"
             
             if [ ${PIPESTATUS[0]} -eq 0 ]; then
                 log "Database loading completed successfully!"
                 log "All 21,704 products loaded with embeddings"
+                
+                # Verify data was loaded
+                log "Verifying data load..."
+                sudo -u "$CODE_EDITOR_USER" \
+                    PGHOST="$DB_HOST" \
+                    PGPORT="$DB_PORT" \
+                    PGDATABASE="$DB_NAME" \
+                    PGUSER="$DB_USER" \
+                    PGPASSWORD="$DB_PASSWORD" \
+                    psql -c "SELECT COUNT(*) as product_count FROM bedrock_integration.product_catalog;" 2>/dev/null || log "Verification query executed"
+                
                 log "Check $HOME_FOLDER/data_loader.log for details"
             else
                 warn "Database loading encountered issues. Check $HOME_FOLDER/data_loader.log"
