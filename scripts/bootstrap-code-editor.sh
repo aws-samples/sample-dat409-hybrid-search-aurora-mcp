@@ -221,11 +221,29 @@ cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
     "python.linting.enabled": true,
     "jupyter.jupyterServerType": "local",
     "jupyter.notebookFileRoot": "/workshop",
+    "jupyter.kernels.filter": [
+        {
+            "path": "/usr/bin/python3.13",
+            "type": "pythonEnvironment"
+        }
+    ],
+    "notebook.defaultKernel": "python3",
+    "notebook.kernelProviderAssociations": {
+        "jupyter-notebook": [
+            "python3"
+        ]
+    },
     "terminal.integrated.defaultProfile.linux": "bash",
     "terminal.integrated.cwd": "/workshop",
     "files.autoSave": "afterDelay",
     "files.autoSaveDelay": 1000,
-    "workbench.startupEditor": "none"
+    "workbench.startupEditor": "none",
+    "git.enabled": false,
+    "git.path": "",
+    "git.autorefresh": false,
+    "git.autofetch": false,
+    "git.allowNoVerifyCommit": false,
+    "scm.defaultViewMode": "tree"
 }
 VSCODE_SETTINGS
 
@@ -236,10 +254,40 @@ log "VS Code extensions and settings configured"
 log "==================== End VS Code Extensions Section ===================="
 
 # ===========================================================================
+# GIT CONFIGURATION - DISABLE COMMITS
+# ===========================================================================
+
+log "==================== Configuring Git (Read-Only) ===================="
+
+# Configure Git to be read-only for participant user
+sudo -u "$CODE_EDITOR_USER" bash << 'GIT_CONFIG'
+# Set Git to read-only mode
+git config --global core.editor "echo 'Git commits are disabled in this workshop environment' && false"
+git config --global alias.commit "!echo 'Error: Git commits are disabled in this workshop environment' && false"
+git config --global alias.push "!echo 'Error: Git push is disabled in this workshop environment' && false"
+
+# Create a dummy commit message template that prevents commits
+mkdir -p ~/.git-templates
+echo "# Git commits are disabled in this workshop environment" > ~/.git-templates/commit-message.txt
+git config --global commit.template ~/.git-templates/commit-message.txt
+GIT_CONFIG
+
+log "✅ Git configured for read-only access (commits disabled)"
+
+log "==================== End Git Configuration Section ===================="
+
+# ===========================================================================
 # DATABASE CONFIGURATION SECTION
 # ===========================================================================
 
 log "==================== Database Configuration Section ===================="
+
+# Declare DB variables globally so they're available to all functions
+export DB_HOST=""
+export DB_PORT=""
+export DB_NAME=""
+export DB_USER=""
+export DB_PASSWORD=""
 
 if [ ! -z "$DB_SECRET_ARN" ] && [ "$DB_SECRET_ARN" != "none" ]; then
     log "Retrieving database credentials from Secrets Manager..."
@@ -251,7 +299,7 @@ if [ ! -z "$DB_SECRET_ARN" ] && [ "$DB_SECRET_ARN" != "none" ]; then
         --output text 2>/dev/null)
     
     if [ ! -z "$DB_SECRET" ]; then
-        # Parse the secret JSON
+        # Parse the secret JSON and EXPORT to environment
         export DB_HOST=$(echo "$DB_SECRET" | jq -r .host)
         export DB_PORT=$(echo "$DB_SECRET" | jq -r .port)
         export DB_NAME=$(echo "$DB_SECRET" | jq -r .dbname)
@@ -262,6 +310,12 @@ if [ ! -z "$DB_SECRET_ARN" ] && [ "$DB_SECRET_ARN" != "none" ]; then
         log "Database Host: $DB_HOST"
         log "Database Name: $DB_NAME"
         log "Database User: $DB_USER"
+        log "DB_PASSWORD length: ${#DB_PASSWORD}"
+        
+        # Verify all credentials were extracted
+        if [ -z "$DB_PASSWORD" ] || [ "$DB_PASSWORD" == "null" ]; then
+            error "Failed to extract DB_PASSWORD from secret"
+        fi
         
         # Create .env file in workshop directory
         log "Creating .env file with database credentials..."
@@ -369,6 +423,22 @@ sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
     seaborn
 check_success "Python dependencies installation"
 
+# Configure Jupyter to use Python 3.13 as default kernel
+log "Configuring Jupyter default kernel..."
+sudo -u "$CODE_EDITOR_USER" python3.13 -m ipykernel install --user --name python3 --display-name "Python 3.13"
+
+# Create Jupyter config to set default kernel
+sudo -u "$CODE_EDITOR_USER" mkdir -p "/home/$CODE_EDITOR_USER/.jupyter"
+cat > "/home/$CODE_EDITOR_USER/.jupyter/jupyter_notebook_config.py" << 'JUPYTER_CONFIG'
+c.NotebookApp.kernel_spec_manager_class = 'jupyter_client.kernelspec.KernelSpecManager'
+c.MultiKernelManager.default_kernel_name = 'python3'
+c.Session.kernel_name = 'python3'
+JUPYTER_CONFIG
+
+chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "/home/$CODE_EDITOR_USER/.jupyter/jupyter_notebook_config.py"
+
+log "✅ Jupyter configured with Python 3.13 as default kernel"
+
 log "==================== End Python Dependencies Section ===================="
 
 # ===========================================================================
@@ -414,6 +484,9 @@ AWS_REGION = os.environ.get('AWS_REGION', 'us-west-2')
 
 if not all([DB_HOST, DB_USER, DB_PASSWORD]):
     print("❌ Missing database credentials")
+    print(f"   DB_HOST: {'✓' if DB_HOST else '✗'}")
+    print(f"   DB_USER: {'✓' if DB_USER else '✗'}")
+    print(f"   DB_PASSWORD: {'✓' if DB_PASSWORD else '✗'}")
     sys.exit(1)
 
 print(f"Database: {DB_HOST}:{DB_PORT}/{DB_NAME}")
@@ -472,9 +545,9 @@ from tqdm import tqdm
 bedrock_runtime = boto3.client('bedrock-runtime', region_name=AWS_REGION)
 
 def generate_embedding_cohere(text):
-    """Generate Cohere embedding with fallback"""
+    """Generate Cohere embedding with Titan fallback"""
     if not text or pd.isna(text):
-        return np.random.randn(1024).tolist()
+        raise ValueError("Cannot generate embedding for empty text")
     
     try:
         body = json.dumps({
@@ -497,10 +570,21 @@ def generate_embedding_cohere(text):
                 return response_body['embeddings']['float'][0]
             else:
                 return response_body['embeddings'][0]
-    except:
-        # Fallback to random
-        np.random.seed(hash(str(text)) % 2**32)
-        return np.random.randn(1024).tolist()
+    except Exception as cohere_error:
+        # Fallback to Titan Text v2
+        titan_body = json.dumps({
+            "inputText": str(text)[:8000]
+        })
+        
+        titan_response = bedrock_runtime.invoke_model(
+            modelId='amazon.titan-embed-text-v2:0',
+            body=titan_body,
+            accept='application/json',
+            contentType='application/json'
+        )
+        
+        titan_response_body = json.loads(titan_response['body'].read())
+        return titan_response_body.get('embedding')
 
 # Setup database
 print("Setting up database schema...")
@@ -715,8 +799,9 @@ chmod +x "$HOME_FOLDER/run_data_loader.py"
 # Run the data loader if database credentials are available
 if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
     log "Running data loader for 21,704 products (this will take 5-8 minutes)..."
+    log "Using credentials: DB_HOST=$DB_HOST, DB_USER=$DB_USER, DB_PASSWORD length=${#DB_PASSWORD}"
     
-    # Run the data loader as participant user with all environment variables
+    # Run the data loader as participant user with ALL environment variables explicitly passed
     sudo -u "$CODE_EDITOR_USER" \
         DB_HOST="$DB_HOST" \
         DB_PORT="$DB_PORT" \
@@ -750,6 +835,7 @@ if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
     fi
 else
     warn "Database credentials not available, skipping data loading"
+    log "Credential status: DB_HOST=${DB_HOST:+set}, DB_USER=${DB_USER:+set}, DB_PASSWORD=${DB_PASSWORD:+set}"
 fi
 
 log "==================== End Database Loading Section ===================="
@@ -791,14 +877,228 @@ else
     error "Nginx not responding on port 80: $NGINX_RESPONSE"
 fi
 
+# Validate Database Environment Variables
+log "Validating database environment variables..."
+if [ ! -z "$DB_HOST" ] && [ "$DB_HOST" != "null" ]; then
+    log "✅ DB_HOST: $DB_HOST"
+else
+    warn "❌ DB_HOST not set"
+fi
+
+if [ ! -z "$DB_USER" ] && [ "$DB_USER" != "null" ]; then
+    log "✅ DB_USER: $DB_USER"
+else
+    warn "❌ DB_USER not set"
+fi
+
+if [ ! -z "$DB_PASSWORD" ] && [ "$DB_PASSWORD" != "null" ]; then
+    log "✅ DB_PASSWORD: Set (length: ${#DB_PASSWORD})"
+else
+    warn "❌ DB_PASSWORD not set"
+fi
+
+if [ ! -z "$DB_NAME" ] && [ "$DB_NAME" != "null" ]; then
+    log "✅ DB_NAME: $DB_NAME"
+else
+    warn "❌ DB_NAME not set"
+fi
+
+# Validate .env file
+log "Validating .env file..."
+if [ -f "$HOME_FOLDER/.env" ]; then
+    log "✅ .env file exists at $HOME_FOLDER/.env"
+    
+    # Check contents
+    if grep -q "DB_HOST=" "$HOME_FOLDER/.env" && \
+       grep -q "DB_USER=" "$HOME_FOLDER/.env" && \
+       grep -q "DB_PASSWORD=" "$HOME_FOLDER/.env" && \
+       grep -q "DB_NAME=" "$HOME_FOLDER/.env"; then
+        log "✅ .env file contains all required database variables"
+    else
+        warn "⚠️  .env file missing some database variables"
+    fi
+else
+    warn "❌ .env file not found at $HOME_FOLDER/.env"
+fi
+
+# Validate .pgpass file
+if [ -f "/home/$CODE_EDITOR_USER/.pgpass" ]; then
+    log "✅ .pgpass file exists"
+else
+    warn "❌ .pgpass file not found"
+fi
+
+# Validate Database Connection and Components
+if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
+    log "Validating database connection and components..."
+    
+    # Test database connectivity
+    if sudo -u "$CODE_EDITOR_USER" \
+        PGHOST="$DB_HOST" \
+        PGPORT="$DB_PORT" \
+        PGDATABASE="$DB_NAME" \
+        PGUSER="$DB_USER" \
+        PGPASSWORD="$DB_PASSWORD" \
+        psql -c "SELECT 1;" &>/dev/null; then
+        log "✅ Database connection successful"
+        
+        # Check PostgreSQL extensions
+        log "Checking PostgreSQL extensions..."
+        EXTENSIONS=$(sudo -u "$CODE_EDITOR_USER" \
+            PGHOST="$DB_HOST" \
+            PGPORT="$DB_PORT" \
+            PGDATABASE="$DB_NAME" \
+            PGUSER="$DB_USER" \
+            PGPASSWORD="$DB_PASSWORD" \
+            psql -t -c "SELECT extname FROM pg_extension WHERE extname IN ('vector', 'pg_trgm');" 2>/dev/null | xargs)
+        
+        if echo "$EXTENSIONS" | grep -q "vector"; then
+            log "✅ pgvector extension installed"
+        else
+            warn "❌ pgvector extension not found"
+        fi
+        
+        if echo "$EXTENSIONS" | grep -q "pg_trgm"; then
+            log "✅ pg_trgm extension installed"
+        else
+            warn "❌ pg_trgm extension not found"
+        fi
+        
+        # Check schema
+        log "Checking database schema..."
+        SCHEMA_EXISTS=$(sudo -u "$CODE_EDITOR_USER" \
+            PGHOST="$DB_HOST" \
+            PGPORT="$DB_PORT" \
+            PGDATABASE="$DB_NAME" \
+            PGUSER="$DB_USER" \
+            PGPASSWORD="$DB_PASSWORD" \
+            psql -t -c "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = 'bedrock_integration');" 2>/dev/null | xargs)
+        
+        if [ "$SCHEMA_EXISTS" = "t" ]; then
+            log "✅ Schema 'bedrock_integration' exists"
+        else
+            warn "❌ Schema 'bedrock_integration' not found"
+        fi
+        
+        # Check table
+        log "Checking product_catalog table..."
+        TABLE_EXISTS=$(sudo -u "$CODE_EDITOR_USER" \
+            PGHOST="$DB_HOST" \
+            PGPORT="$DB_PORT" \
+            PGDATABASE="$DB_NAME" \
+            PGUSER="$DB_USER" \
+            PGPASSWORD="$DB_PASSWORD" \
+            psql -t -c "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = 'bedrock_integration' AND table_name = 'product_catalog');" 2>/dev/null | xargs)
+        
+        if [ "$TABLE_EXISTS" = "t" ]; then
+            log "✅ Table 'product_catalog' exists"
+            
+            # Check row count
+            ROW_COUNT=$(sudo -u "$CODE_EDITOR_USER" \
+                PGHOST="$DB_HOST" \
+                PGPORT="$DB_PORT" \
+                PGDATABASE="$DB_NAME" \
+                PGUSER="$DB_USER" \
+                PGPASSWORD="$DB_PASSWORD" \
+                psql -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog;" 2>/dev/null | xargs)
+            
+            if [ ! -z "$ROW_COUNT" ] && [ "$ROW_COUNT" -gt 0 ]; then
+                log "✅ Data loaded: $ROW_COUNT products"
+            else
+                warn "⚠️  Table exists but no data loaded (count: $ROW_COUNT)"
+            fi
+            
+            # Check for embeddings
+            EMBEDDING_COUNT=$(sudo -u "$CODE_EDITOR_USER" \
+                PGHOST="$DB_HOST" \
+                PGPORT="$DB_PORT" \
+                PGDATABASE="$DB_NAME" \
+                PGUSER="$DB_USER" \
+                PGPASSWORD="$DB_PASSWORD" \
+                psql -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog WHERE embedding IS NOT NULL;" 2>/dev/null | xargs)
+            
+            if [ ! -z "$EMBEDDING_COUNT" ] && [ "$EMBEDDING_COUNT" -gt 0 ]; then
+                log "✅ Embeddings present: $EMBEDDING_COUNT products with embeddings"
+            else
+                warn "⚠️  No embeddings found in table"
+            fi
+        else
+            warn "❌ Table 'product_catalog' not found"
+        fi
+        
+        # Check indexes
+        log "Checking indexes..."
+        INDEXES=$(sudo -u "$CODE_EDITOR_USER" \
+            PGHOST="$DB_HOST" \
+            PGPORT="$DB_PORT" \
+            PGDATABASE="$DB_NAME" \
+            PGUSER="$DB_USER" \
+            PGPASSWORD="$DB_PASSWORD" \
+            psql -t -c "SELECT indexname FROM pg_indexes WHERE schemaname = 'bedrock_integration' AND tablename = 'product_catalog';" 2>/dev/null | wc -l)
+        
+        if [ ! -z "$INDEXES" ] && [ "$INDEXES" -gt 0 ]; then
+            log "✅ Indexes created: $INDEXES indexes on product_catalog"
+            
+            # List specific indexes
+            sudo -u "$CODE_EDITOR_USER" \
+                PGHOST="$DB_HOST" \
+                PGPORT="$DB_PORT" \
+                PGDATABASE="$DB_NAME" \
+                PGUSER="$DB_USER" \
+                PGPASSWORD="$DB_PASSWORD" \
+                psql -t -c "SELECT '   - ' || indexname FROM pg_indexes WHERE schemaname = 'bedrock_integration' AND tablename = 'product_catalog';" 2>/dev/null || true
+        else
+            warn "⚠️  No indexes found on product_catalog table"
+        fi
+        
+    else
+        warn "❌ Database connection failed - cannot validate components"
+    fi
+else
+    warn "⚠️  Database credentials not available - skipping database validation"
+fi
+
 # Show final status
 log "==================== Bootstrap Summary ===================="
+echo "🔧 SERVICES:"
 echo "  Nginx: $(systemctl is-active nginx)"
 echo "  Code Editor: $(systemctl is-active code-editor@$CODE_EDITOR_USER)"
-echo "  Database Config: $( [ -f "$HOME_FOLDER/.env" ] && echo "✅ Created" || echo "❌ Missing" )"
-echo "  Python Extensions: $( [ -d "/home/$CODE_EDITOR_USER/.code-editor-server/extensions/ms-python.python" ] && echo "✅ Installed" || echo "⚠️  Check installation" )"
-echo "  Database Loading: Check $HOME_FOLDER/data_loader.log"
+echo ""
+echo "📁 CONFIGURATION FILES:"
+echo "  .env file: $( [ -f "$HOME_FOLDER/.env" ] && echo "✅ Created" || echo "❌ Missing" )"
+echo "  .pgpass file: $( [ -f "/home/$CODE_EDITOR_USER/.pgpass" ] && echo "✅ Created" || echo "❌ Missing" )"
+echo "  .bashrc updated: ✅ Yes"
+echo ""
+echo "🐍 PYTHON & EXTENSIONS:"
+echo "  Python version: $(python3.13 --version 2>/dev/null || echo 'Not found')"
+echo "  VS Code Extensions: $( [ -d "/home/$CODE_EDITOR_USER/.code-editor-server/extensions/ms-python.python" ] && echo "✅ Installed" || echo "⚠️  Check installation" )"
+echo "  Jupyter Kernel: ✅ Python 3.13 (default)"
+echo ""
+echo "🔒 SECURITY:"
+echo "  Git Commits: ❌ Disabled (read-only mode)"
+echo ""
+echo "🗄️  DATABASE:"
+if [ ! -z "$DB_HOST" ]; then
+    echo "  Host: $DB_HOST"
+    echo "  Database: $DB_NAME"
+    echo "  User: $DB_USER"
+    echo "  Password: $( [ ! -z "$DB_PASSWORD" ] && echo "✅ Set" || echo "❌ Not set" )"
+    
+    if [ "$TABLE_EXISTS" = "t" ] && [ ! -z "$ROW_COUNT" ]; then
+        echo "  Schema: ✅ bedrock_integration"
+        echo "  Table: ✅ product_catalog"
+        echo "  Data: ✅ $ROW_COUNT products loaded"
+        echo "  Embeddings: ✅ $EMBEDDING_COUNT with embeddings"
+        echo "  Indexes: ✅ $INDEXES indexes created"
+        echo "  Extensions: vector, pg_trgm"
+    else
+        echo "  Status: ⚠️  Check $HOME_FOLDER/data_loader.log"
+    fi
+else
+    echo "  Status: ❌ Not configured"
+fi
 
+log ""
 log "Listening ports:"
 ss -tlpn | grep -E ":(80|8080)" || warn "No services listening on expected ports"
 
@@ -807,6 +1107,7 @@ log "============================================================"
 log "✅ Bootstrap completed successfully!"
 log "Code Editor URL: Use CloudFront URL with token: $CODE_EDITOR_PASSWORD"
 log "Database: Configured with credentials from Secrets Manager"
-log "Data: Loading 21,704 products with embeddings"
 log "Extensions: Python and Jupyter VS Code extensions installed"
+log "Git: Read-only mode (commits disabled)"
+log "Jupyter: Python 3.13 kernel pre-selected as default"
 log "============================================================"
