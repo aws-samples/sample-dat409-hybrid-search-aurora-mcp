@@ -504,44 +504,75 @@ def generate_embedding_cohere(text):
 
 # Setup database
 print("Setting up database schema...")
-conn = psycopg.connect(
-    host=DB_HOST,
-    port=DB_PORT,
-    user=DB_USER,
-    password=DB_PASSWORD,
-    dbname=DB_NAME,
-    autocommit=True
-)
-
-# Enable extensions
-conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
-register_vector(conn)
-
-# Create schema
-conn.execute("CREATE SCHEMA IF NOT EXISTS bedrock_integration;")
-
-# Drop and recreate table
-conn.execute("DROP TABLE IF EXISTS bedrock_integration.product_catalog CASCADE;")
-conn.execute("""
-CREATE TABLE bedrock_integration.product_catalog (
-    "productId" VARCHAR(255) PRIMARY KEY,
-    product_description TEXT,
-    imgurl TEXT,
-    producturl TEXT,
-    stars NUMERIC,
-    reviews INT,
-    price NUMERIC,
-    category_id INT,
-    isbestseller BOOLEAN,
-    boughtinlastmonth INT,
-    category_name VARCHAR(255),
-    quantity INT,
-    embedding vector(1024)
-);
-""")
-print("✅ Database schema created")
-conn.close()
+try:
+    conn = psycopg.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        dbname=DB_NAME,
+        autocommit=True
+    )
+    
+    # Enable extensions - CRITICAL: Must be done before using vector types
+    print("Creating PostgreSQL extensions...")
+    try:
+        conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+        print("  ✅ vector extension created/verified")
+    except Exception as e:
+        print(f"  ⚠️ vector extension: {e}")
+    
+    try:
+        conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
+        print("  ✅ pg_trgm extension created/verified")
+    except Exception as e:
+        print(f"  ⚠️ pg_trgm extension: {e}")
+    
+    # Verify vector extension is installed
+    result = conn.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'").fetchone()
+    if result:
+        print(f"  ✅ pgvector version: {result[0]}")
+        register_vector(conn)
+    else:
+        print("  ❌ vector extension not found - cannot proceed")
+        sys.exit(1)
+    
+    # Create schema
+    conn.execute("CREATE SCHEMA IF NOT EXISTS bedrock_integration;")
+    print("  ✅ Schema 'bedrock_integration' created/verified")
+    
+    # Drop and recreate table
+    conn.execute("DROP TABLE IF EXISTS bedrock_integration.product_catalog CASCADE;")
+    conn.execute("""
+    CREATE TABLE bedrock_integration.product_catalog (
+        "productId" VARCHAR(255) PRIMARY KEY,
+        product_description TEXT,
+        imgurl TEXT,
+        producturl TEXT,
+        stars NUMERIC,
+        reviews INT,
+        price NUMERIC,
+        category_id INT,
+        isbestseller BOOLEAN,
+        boughtinlastmonth INT,
+        category_name VARCHAR(255),
+        quantity INT,
+        embedding vector(1024)
+    );
+    """)
+    print("✅ Database schema created successfully")
+    conn.close()
+    
+except psycopg.OperationalError as e:
+    print(f"❌ Database connection failed: {e}")
+    print(f"   Host: {DB_HOST}")
+    print(f"   Port: {DB_PORT}")
+    print(f"   Database: {DB_NAME}")
+    print(f"   User: {DB_USER}")
+    sys.exit(1)
+except Exception as e:
+    print(f"❌ Database setup failed: {e}")
+    sys.exit(1)
 
 # Load data
 print("\nLoading product data...")
@@ -582,65 +613,89 @@ conn = psycopg.connect(
     dbname=DB_NAME,
     autocommit=True
 )
+
+# IMPORTANT: Must register vector type AFTER connecting
 register_vector(conn)
 
 BATCH_SIZE = 1000
-with conn.cursor() as cur:
-    batches = []
-    total_processed = 0
-    
-    for i, (_, row) in enumerate(df.iterrows(), 1):
-        batches.append((
-            row['productId'],
-            str(row['product_description'])[:5000],
-            str(row.get('imgurl', ''))[:500],
-            str(row.get('producturl', ''))[:500],
-            float(row['stars']),
-            int(row['reviews']),
-            float(row['price']),
-            int(row.get('category_id', 0)),
-            bool(row.get('isbestseller', False)),
-            int(row.get('boughtinlastmonth', 0)),
-            str(row['category_name'])[:255],
-            int(row.get('quantity', 0)),
-            row['embedding']
-        ))
+try:
+    with conn.cursor() as cur:
+        batches = []
+        total_processed = 0
         
-        if len(batches) == BATCH_SIZE or i == len(df):
-            cur.executemany("""
-            INSERT INTO bedrock_integration.product_catalog (
-                "productId", product_description, imgurl, producturl,
-                stars, reviews, price, category_id, isbestseller,
-                boughtinlastmonth, category_name, quantity, embedding
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT ("productId") DO UPDATE 
-            SET product_description = EXCLUDED.product_description,
-                embedding = EXCLUDED.embedding;
-            """, batches)
+        for i, (_, row) in enumerate(df.iterrows(), 1):
+            batches.append((
+                row['productId'],
+                str(row['product_description'])[:5000],
+                str(row.get('imgurl', ''))[:500],
+                str(row.get('producturl', ''))[:500],
+                float(row['stars']),
+                int(row['reviews']),
+                float(row['price']),
+                int(row.get('category_id', 0)),
+                bool(row.get('isbestseller', False)),
+                int(row.get('boughtinlastmonth', 0)),
+                str(row['category_name'])[:255],
+                int(row.get('quantity', 0)),
+                row['embedding']
+            ))
             
-            total_processed += len(batches)
-            print(f"\rProgress: {total_processed}/{len(df)} products", end="")
-            batches = []
+            if len(batches) == BATCH_SIZE or i == len(df):
+                cur.executemany("""
+                INSERT INTO bedrock_integration.product_catalog (
+                    "productId", product_description, imgurl, producturl,
+                    stars, reviews, price, category_id, isbestseller,
+                    boughtinlastmonth, category_name, quantity, embedding
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT ("productId") DO UPDATE 
+                SET product_description = EXCLUDED.product_description,
+                    embedding = EXCLUDED.embedding;
+                """, batches)
+                
+                total_processed += len(batches)
+                print(f"\rProgress: {total_processed}/{len(df)} products", end="", flush=True)
+                batches = []
 
-print("\n\n🔧 Creating indexes...")
-indexes = [
-    ("CREATE INDEX IF NOT EXISTS product_catalog_embedding_idx ON bedrock_integration.product_catalog USING hnsw (embedding vector_cosine_ops);", "HNSW vector"),
-    ("CREATE INDEX IF NOT EXISTS product_catalog_fts_idx ON bedrock_integration.product_catalog USING GIN (to_tsvector('english', coalesce(product_description, '')));", "Full-text search"),
-    ("CREATE INDEX IF NOT EXISTS product_catalog_trgm_idx ON bedrock_integration.product_catalog USING GIN (product_description gin_trgm_ops);", "Trigram"),
-    ("CREATE INDEX IF NOT EXISTS product_catalog_category_idx ON bedrock_integration.product_catalog(category_name);", "Category"),
-    ("CREATE INDEX IF NOT EXISTS product_catalog_price_idx ON bedrock_integration.product_catalog(price);", "Price")
-]
+    print("\n\n🔧 Creating indexes...")
+    indexes = [
+        ("CREATE INDEX IF NOT EXISTS product_catalog_embedding_idx ON bedrock_integration.product_catalog USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);", "HNSW vector"),
+        ("CREATE INDEX IF NOT EXISTS product_catalog_fts_idx ON bedrock_integration.product_catalog USING GIN (to_tsvector('english', coalesce(product_description, '')));", "Full-text search"),
+        ("CREATE INDEX IF NOT EXISTS product_catalog_trgm_idx ON bedrock_integration.product_catalog USING GIN (product_description gin_trgm_ops);", "Trigram"),
+        ("CREATE INDEX IF NOT EXISTS product_catalog_category_idx ON bedrock_integration.product_catalog(category_name);", "Category"),
+        ("CREATE INDEX IF NOT EXISTS product_catalog_price_idx ON bedrock_integration.product_catalog(price);", "Price")
+    ]
 
-for sql, name in indexes:
-    print(f"  Creating {name} index...")
-    cur.execute(sql)
+    with conn.cursor() as cur:
+        for sql, name in indexes:
+            print(f"  Creating {name} index...")
+            try:
+                cur.execute(sql)
+                print(f"    ✅ {name} index created")
+            except Exception as e:
+                print(f"    ⚠️ {name} index: {e}")
 
-print("\n🔧 Running VACUUM ANALYZE...")
-cur.execute("VACUUM ANALYZE bedrock_integration.product_catalog;")
+        print("\n🔧 Running VACUUM ANALYZE...")
+        cur.execute("VACUUM ANALYZE bedrock_integration.product_catalog;")
 
-# Verify
-cur.execute("SELECT COUNT(*) FROM bedrock_integration.product_catalog")
-final_count = cur.fetchone()[0]
+        # Verify
+        cur.execute("SELECT COUNT(*) FROM bedrock_integration.product_catalog")
+        final_count = cur.fetchone()[0]
+        
+        # Verify vector extension and embeddings
+        cur.execute("""
+            SELECT COUNT(*) as with_embeddings,
+                   AVG(vector_dims(embedding)) as avg_dims
+            FROM bedrock_integration.product_catalog 
+            WHERE embedding IS NOT NULL
+        """)
+        emb_result = cur.fetchone()
+        embeddings_count = emb_result[0] if emb_result else 0
+        avg_dims = emb_result[1] if emb_result else 0
+
+except Exception as e:
+    print(f"\n❌ Error during database operations: {e}")
+    conn.close()
+    sys.exit(1)
 
 conn.close()
 
@@ -648,6 +703,8 @@ total_time = time.time() - start_time
 print("\n" + "="*60)
 print(f"✅ FULL DATA LOADING COMPLETE!")
 print(f"   Total rows loaded: {final_count:,}")
+print(f"   Rows with embeddings: {embeddings_count:,}")
+print(f"   Embedding dimensions: {int(avg_dims) if avg_dims else 0}")
 print(f"   Total time: {total_time/60:.1f} minutes")
 print("="*60)
 LOADER_EOF
