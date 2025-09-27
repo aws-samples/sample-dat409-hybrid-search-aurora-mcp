@@ -154,6 +154,182 @@ systemctl enable "code-editor@$CODE_EDITOR_USER"
 systemctl start "code-editor@$CODE_EDITOR_USER"
 check_success "Code Editor service creation"
 
+# Wait for Code Editor to fully start
+log "Waiting for Code Editor to initialize..."
+sleep 20
+
+# Verify Code Editor is responding
+MAX_RETRIES=30
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ | grep -q "200\|302\|401\|403"; then
+        log "Code Editor is responding"
+        break
+    else
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+            error "Code Editor failed to start after $MAX_RETRIES attempts"
+        fi
+        log "Waiting for Code Editor to respond... (attempt $RETRY_COUNT/$MAX_RETRIES)"
+        sleep 5
+    fi
+done
+
+# ===========================================================================
+# VS CODE EXTENSIONS INSTALLATION
+# ===========================================================================
+
+log "==================== Installing VS Code Extensions ===================="
+
+# Function to install VS Code extension
+install_vscode_extension() {
+    local EXTENSION_ID=$1
+    local EXTENSION_NAME=$2
+    
+    log "Installing extension: $EXTENSION_NAME ($EXTENSION_ID)..."
+    
+    # Try multiple methods to install extensions
+    # Method 1: Using code-editor-server command directly
+    if [ -f "$CODE_EDITOR_CMD" ]; then
+        sudo -u "$CODE_EDITOR_USER" "$CODE_EDITOR_CMD" --install-extension "$EXTENSION_ID" 2>&1 | tee -a /tmp/extension_install.log
+        
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            log "✅ Successfully installed $EXTENSION_NAME via code-editor-server"
+            return 0
+        fi
+    fi
+    
+    # Method 2: Using the code command if available
+    if command -v code &> /dev/null; then
+        sudo -u "$CODE_EDITOR_USER" code --install-extension "$EXTENSION_ID" 2>&1 | tee -a /tmp/extension_install.log
+        
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            log "✅ Successfully installed $EXTENSION_NAME via code command"
+            return 0
+        fi
+    fi
+    
+    # Method 3: Direct download and install
+    log "Attempting manual installation for $EXTENSION_NAME..."
+    
+    # Create extensions directory if it doesn't exist
+    EXTENSIONS_DIR="/home/$CODE_EDITOR_USER/.local/share/code-server/extensions"
+    if [ ! -d "$EXTENSIONS_DIR" ]; then
+        EXTENSIONS_DIR="/home/$CODE_EDITOR_USER/.code-editor-server/extensions"
+    fi
+    
+    sudo -u "$CODE_EDITOR_USER" mkdir -p "$EXTENSIONS_DIR"
+    
+    # Download extension from marketplace
+    PUBLISHER="${EXTENSION_ID%%.*}"
+    EXTENSION_NAME_SHORT="${EXTENSION_ID#*.}"
+    
+    # Try to download from VS Code marketplace
+    MARKETPLACE_URL="https://marketplace.visualstudio.com/_apis/public/gallery/publishers/${PUBLISHER}/vsextensions/${EXTENSION_NAME_SHORT}/latest/vspackage"
+    
+    cd "$EXTENSIONS_DIR"
+    sudo -u "$CODE_EDITOR_USER" wget -q -O "${EXTENSION_ID}.vsix" "$MARKETPLACE_URL" 2>/dev/null
+    
+    if [ -f "${EXTENSION_ID}.vsix" ]; then
+        # Extract the extension
+        sudo -u "$CODE_EDITOR_USER" unzip -q "${EXTENSION_ID}.vsix" -d "${EXTENSION_ID}" 2>/dev/null
+        rm -f "${EXTENSION_ID}.vsix"
+        
+        if [ -d "${EXTENSION_ID}" ]; then
+            log "✅ Manually installed $EXTENSION_NAME"
+            return 0
+        fi
+    fi
+    
+    warn "⚠️ Could not install $EXTENSION_NAME - may need manual installation"
+    return 1
+}
+
+# List of essential extensions to install
+declare -a EXTENSIONS=(
+    "ms-python.python:Python"
+    "ms-toolsai.jupyter:Jupyter"
+    "ms-toolsai.vscode-jupyter-cell-tags:Jupyter Cell Tags"
+    "ms-toolsai.jupyter-keymap:Jupyter Keymap"
+    "ms-toolsai.jupyter-renderers:Jupyter Renderers"
+    "ms-toolsai.vscode-jupyter-slideshow:Jupyter Slide Show"
+)
+
+# Install each extension
+for EXTENSION_INFO in "${EXTENSIONS[@]}"; do
+    EXTENSION_ID="${EXTENSION_INFO%%:*}"
+    EXTENSION_NAME="${EXTENSION_INFO#*:}"
+    install_vscode_extension "$EXTENSION_ID" "$EXTENSION_NAME"
+done
+
+# Additional helpful extensions (optional)
+log "Installing additional helpful extensions..."
+declare -a OPTIONAL_EXTENSIONS=(
+    "ms-python.vscode-pylance:Pylance"
+    "ms-python.debugpy:Python Debugger"
+    "redhat.vscode-yaml:YAML"
+    "ms-vscode.makefile-tools:Makefile Tools"
+    "DavidAnson.vscode-markdownlint:Markdown Lint"
+)
+
+for EXTENSION_INFO in "${OPTIONAL_EXTENSIONS[@]}"; do
+    EXTENSION_ID="${EXTENSION_INFO%%:*}"
+    EXTENSION_NAME="${EXTENSION_INFO#*:}"
+    install_vscode_extension "$EXTENSION_ID" "$EXTENSION_NAME" || true  # Don't fail on optional extensions
+done
+
+# Configure VS Code settings for Python and Jupyter
+log "Configuring VS Code settings for Python and Jupyter..."
+SETTINGS_DIR="/home/$CODE_EDITOR_USER/.local/share/code-server"
+if [ ! -d "$SETTINGS_DIR" ]; then
+    SETTINGS_DIR="/home/$CODE_EDITOR_USER/.code-editor-server"
+fi
+
+sudo -u "$CODE_EDITOR_USER" mkdir -p "$SETTINGS_DIR/User"
+
+# Create VS Code settings.json with Python and Jupyter configuration
+cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
+{
+    "python.defaultInterpreterPath": "/usr/bin/python3.13",
+    "python.terminal.activateEnvironment": true,
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.formatting.provider": "black",
+    "jupyter.jupyterServerType": "local",
+    "jupyter.notebookFileRoot": "/workshop",
+    "jupyter.alwaysTrustNotebooks": true,
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.cwd": "/workshop",
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 1000,
+    "workbench.startupEditor": "none",
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": true,
+    "jupyter.askForKernelRestart": false,
+    "jupyter.interactiveWindow.textEditor.executeSelection": true,
+    "extensions.autoUpdate": true,
+    "extensions.autoCheckUpdates": true
+}
+VSCODE_SETTINGS
+
+chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$SETTINGS_DIR/User/settings.json"
+
+log "VS Code extensions and settings configured successfully"
+
+# Restart Code Editor to ensure extensions are loaded
+log "Restarting Code Editor to load extensions..."
+systemctl restart "code-editor@$CODE_EDITOR_USER"
+sleep 10
+
+# Verify Code Editor is still running after restart
+if systemctl is-active --quiet "code-editor@$CODE_EDITOR_USER"; then
+    log "✅ Code Editor restarted successfully with extensions"
+else
+    warn "Code Editor may need manual restart to load extensions"
+fi
+
+log "==================== End VS Code Extensions Section ===================="
+
 # ===========================================================================
 # DATABASE LOADING SECTION
 # Note: Full load of 21,704 products takes approximately 5-8 minutes
