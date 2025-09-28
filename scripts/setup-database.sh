@@ -51,17 +51,32 @@ else
 fi
 
 # Test Bedrock access
+# Test Bedrock access
 log "Testing Bedrock access..."
+BODY_JSON='{"texts":["test"],"input_type":"search_document","embedding_types":["float"],"truncate":"END"}'
+BODY_BASE64=$(echo "$BODY_JSON" | base64)
+
 if aws bedrock-runtime invoke-model \
     --model-id cohere.embed-english-v3 \
-    --body '{"texts":["test"],"input_type":"search_document","embedding_types":["float"],"truncate":"END"}' \
-    --content-type application/json \
-    --accept application/json \
+    --body "$BODY_BASE64" \
+    --region "$AWS_REGION" \
     /tmp/bedrock_test.json 2>/dev/null; then
-    log "✅ Bedrock Cohere model accessible"
-    rm -f /tmp/bedrock_test.json
+    
+    # Verify the response contains embeddings
+    if [ -f /tmp/bedrock_test.json ] && [ $(stat -c%s /tmp/bedrock_test.json 2>/dev/null || stat -f%z /tmp/bedrock_test.json 2>/dev/null) -gt 100 ]; then
+        log "✅ Bedrock Cohere model accessible and working"
+        rm -f /tmp/bedrock_test.json
+    else
+        error "❌ Bedrock model responded but output seems invalid"
+    fi
 else
     error "❌ Bedrock Cohere model not accessible. Please enable it in the console first!"
+    echo "To enable:"
+    echo "1. Go to https://console.aws.amazon.com/bedrock"
+    echo "2. Click 'Model access' in the left sidebar"
+    echo "3. Enable 'Cohere Embed English v3'"
+    echo "4. Wait for 'Access granted' status"
+    exit 1
 fi
 
 # ===========================================================================
