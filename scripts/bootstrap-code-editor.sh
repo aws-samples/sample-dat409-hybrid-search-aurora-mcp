@@ -415,8 +415,6 @@ if [ -f /workshop/.env ]; then
     set +a
 fi
 
-echo "🔘 DAT409 Workshop Environment Ready!"
-echo "📝 Run 'setup-database.sh' after enabling Bedrock models"
 BASHRC_EOF
     
     log "✅ Database credentials configured"
