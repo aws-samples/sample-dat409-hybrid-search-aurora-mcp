@@ -230,6 +230,10 @@ install_vscode_extension "ms-toolsai.vscode-jupyter-cell-tags" "Jupyter Cell Tag
 install_vscode_extension "ms-toolsai.jupyter-keymap" "Jupyter Keymap"
 install_vscode_extension "ms-toolsai.jupyter-renderers" "Jupyter Renderers"
 
+# Install AWS and Amazon Q extensions
+install_vscode_extension "amazonwebservices.aws-toolkit-vscode" "AWS Toolkit"
+install_vscode_extension "amazonwebservices.amazon-q-vscode" "Amazon Q"
+
 # Configure VS Code settings
 log "Configuring VS Code settings..."
 SETTINGS_DIR="/home/$CODE_EDITOR_USER/.code-editor-server"
@@ -259,12 +263,35 @@ cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
     "files.autoSave": "afterDelay",
     "files.autoSaveDelay": 1000,
     "workbench.startupEditor": "none",
+    
     "git.enabled": false,
     "git.path": "",
     "git.autorefresh": false,
     "git.autofetch": false,
     "git.allowNoVerifyCommit": false,
-    "scm.defaultViewMode": "tree"
+    "scm.defaultViewMode": "tree",
+    "git.decorations.enabled": false,
+    "git.showInlineOpenFileAction": false,
+    "git.showPushSuccessNotification": false,
+    "scm.diffDecorations": "none",
+    
+    "aws.telemetry": false,
+    "amazonQ.telemetry": false,
+    "aws.profile": "default",
+    "aws.onDefaultRegionMissing": "add",
+    "amazonQ.shareContentWithAWS": true,
+    "amazonQ.featureDev.enableCodeGen": true,
+    "amazonQ.featureDev.enableInlineCodeCompletion": true,
+    "codewhisperer.includeSuggestionsWithCodeReferences": true,
+    "codewhisperer.shareCodeWhispererContentWithAWS": true,
+    
+    "extensions.autoUpdate": false,
+    "extensions.autoCheckUpdates": false,
+    "telemetry.telemetryLevel": "off",
+    "security.workspace.trust.startupPrompt": "never",
+    "security.workspace.trust.enabled": false,
+    "security.workspace.trust.banner": "never",
+    "security.workspace.trust.emptyWindow": false
 }
 VSCODE_SETTINGS
 
