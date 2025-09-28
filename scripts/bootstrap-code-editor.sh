@@ -943,7 +943,7 @@ else
     log "Credential status: DB_HOST=${DB_HOST:+set}, DB_USER=${DB_USER:+set}, DB_PASSWORD=${DB_PASSWORD:+set}"
 fi
 
-log "==================== End Database Loading Section ===================="
+log "==================== End Lab 1 Database Loading Section ===================="
 
 # ===========================================================================
 # COMPREHENSIVE VALIDATION SECTION
@@ -1824,6 +1824,60 @@ fi
 
 log "==================== End Database Loading Section ===================="
 
+# ===========================================================================
+# LAB 2 SETUP - MCP WITH POSTGRESQL RLS
+# ===========================================================================
+
+log "==================== Setting up Lab 2: MCP with RLS ===================="
+
+# Create Lab 2 directory structure
+log "Creating Lab 2 directory structure..."
+LAB2_DIR="$HOME_FOLDER/lab2-mcp-agent"
+mkdir -p "$LAB2_DIR/setup"
+mkdir -p "$LAB2_DIR/scripts"
+chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$LAB2_DIR"
+
+# Install uv/uvx for MCP
+log "Installing uv/uvx for MCP..."
+if command -v uv &>/dev/null; then
+    log "uv already installed"
+else
+    # Try curl method first (preferred)
+    if command -v curl &>/dev/null; then
+        sudo -u "$CODE_EDITOR_USER" bash -c 'curl -LsSf https://astral.sh/uv/install.sh | sh' || {
+            # Fallback to pip if curl method fails
+            log "curl installation failed, trying pip..."
+            sudo -u "$CODE_EDITOR_USER" python3 -m pip install --user uv
+        }
+    else
+        # Use pip if curl not available
+        sudo -u "$CODE_EDITOR_USER" python3 -m pip install --user uv
+    fi
+fi
+
+# Add uv to PATH for participant user
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> "/home/$CODE_EDITOR_USER/.bashrc"
+
+# Verify uv installation
+if sudo -u "$CODE_EDITOR_USER" bash -c 'source ~/.bashrc && command -v uvx' &>/dev/null; then
+    log "✅ uvx installed successfully"
+else
+    warn "⚠️ uvx installation may need manual verification"
+fi
+
+# Install Streamlit and other Lab 2 Python dependencies
+log "Installing Lab 2 Python dependencies..."
+sudo -u "$CODE_EDITOR_USER" python3 -m pip install --user \
+    streamlit \
+    psycopg \
+    psycopg-binary \
+    boto3 \
+    pandas \
+    numpy \
+    python-dotenv \
+    tqdm
+check_success "Lab 2 Python dependencies installation"
+
 # Create Lab 2 database setup script with 50 HARDCODED product IDs
 log "Creating Lab 2 database setup script with 50 deterministic products..."
 cat > "$LAB2_DIR/setup/lab2_database_setup.sql" << 'SQL_EOF'
@@ -1898,7 +1952,7 @@ CREATE POLICY app_user_policy ON knowledge_base
     USING (true) WITH CHECK (true);
 
 -- 3. Populate with 50 HARDCODED product IDs
-DO $$
+DO $
 DECLARE
     -- All 50 product IDs from your query - deterministic results
     product_ids TEXT[] := ARRAY[
@@ -1988,7 +2042,7 @@ BEGIN
             LEFT(product_description, 100),
             price,
             stars,
-            reviews
+            COALESCE(CAST(metadata->>'reviews' AS INT), 10000)
         INTO product_desc, product_price, product_stars, product_reviews
         FROM bedrock_integration.product_catalog 
         WHERE "productId" = pid;
@@ -2115,7 +2169,7 @@ BEGIN
     
     RAISE NOTICE 'Knowledge base populated with % products', idx;
     RAISE NOTICE 'Total entries created: %', (SELECT COUNT(*) FROM knowledge_base);
-END $$;
+END $;
 
 -- 4. Create MCP helper function
 CREATE OR REPLACE FUNCTION get_mcp_context(
@@ -2123,7 +2177,7 @@ CREATE OR REPLACE FUNCTION get_mcp_context(
     p_persona TEXT DEFAULT 'customer',
     p_time_window INTERVAL DEFAULT NULL,
     p_limit INT DEFAULT 10
-) RETURNS JSON AS $$
+) RETURNS JSON AS $
 DECLARE
     v_result JSON;
     v_embedding vector;
@@ -2154,7 +2208,7 @@ BEGIN
             p.product_description,
             p.price,
             p.stars,
-            p.reviews,
+            COALESCE(CAST(p.metadata->>'reviews' AS INT), 10000) as reviews,
             CASE 
                 WHEN v_embedding IS NOT NULL AND p.embedding IS NOT NULL THEN
                     p.embedding <=> v_embedding
@@ -2194,7 +2248,7 @@ BEGIN
     
     RETURN COALESCE(v_result, '[]'::JSON);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 5. Verification
 SELECT 'Setup complete. Verifying...' as status;
@@ -2223,7 +2277,270 @@ RAISE NOTICE 'Lab 2 database setup complete with 50 hardcoded products!';
 SQL_EOF
 
 chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$LAB2_DIR/setup/lab2_database_setup.sql"
-log "✅ Lab 2 database setup script created with 50 deterministic products"
+
+# Run the Lab 2 database setup if database is available
+if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
+    log "Setting up Lab 2 database objects..."
+    sudo -u "$CODE_EDITOR_USER" \
+        PGHOST="$DB_HOST" \
+        PGPORT="$DB_PORT" \
+        PGDATABASE="$DB_NAME" \
+        PGUSER="$DB_USER" \
+        PGPASSWORD="$DB_PASSWORD" \
+        psql -f "$LAB2_DIR/setup/lab2_database_setup.sql" 2>&1 | tee "$LAB2_DIR/setup/db_setup.log"
+    
+    if [ ${PIPESTATUS[0]} -eq 0 ]; then
+        log "✅ Lab 2 database objects created successfully"
+    else
+        warn "⚠️ Lab 2 database setup encountered issues. Check $LAB2_DIR/setup/db_setup.log"
+    fi
+else
+    warn "Database credentials not available, Lab 2 database setup skipped"
+fi
+
+# Get database cluster ARN and create MCP configuration
+log "Creating MCP configuration..."
+if [ ! -z "$DB_SECRET_ARN" ] && [ "$DB_SECRET_ARN" != "none" ]; then
+    # Extract cluster identifier from cluster endpoint
+    CLUSTER_ID=$(echo "$DB_HOST" | cut -d'.' -f1)
+    
+    # Construct cluster ARN (assuming standard format)
+    if [ ! -z "$AWS_ACCOUNTID" ]; then
+        DB_CLUSTER_ARN="arn:aws:rds:${AWS_REGION}:${AWS_ACCOUNTID}:cluster:${CLUSTER_ID}"
+    else
+        # Try to get account ID
+        AWS_ACCOUNTID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null)
+        if [ ! -z "$AWS_ACCOUNTID" ]; then
+            DB_CLUSTER_ARN="arn:aws:rds:${AWS_REGION}:${AWS_ACCOUNTID}:cluster:${CLUSTER_ID}"
+        else
+            DB_CLUSTER_ARN="[CLUSTER_ARN_HERE]"
+            warn "Could not determine cluster ARN automatically"
+        fi
+    fi
+    
+    # Create MCP configuration file
+    cat > "$LAB2_DIR/mcp_config.json" << MCP_EOF
+{
+  "mcpServers": {
+    "awslabs.postgres-mcp-server": {
+      "command": "uvx",
+      "args": [
+        "awslabs.postgres-mcp-server@latest",
+        "--resource_arn", "$DB_CLUSTER_ARN",
+        "--secret_arn", "$DB_SECRET_ARN",
+        "--database", "$DB_NAME",
+        "--region", "$AWS_REGION",
+        "--readonly", "True"
+      ],
+      "env": {
+        "AWS_PROFILE": "default",
+        "AWS_REGION": "$AWS_REGION",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+MCP_EOF
+    
+    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$LAB2_DIR/mcp_config.json"
+    log "✅ MCP configuration created at $LAB2_DIR/mcp_config.json"
+    
+    # Also add to .env file for easy access
+    cat >> "$HOME_FOLDER/.env" << ENV_APPEND
+
+# Lab 2 MCP Configuration
+DATABASE_CLUSTER_ARN=$DB_CLUSTER_ARN
+MCP_CONFIG_PATH=$LAB2_DIR/mcp_config.json
+ENV_APPEND
+    
+else
+    warn "Database secret ARN not available, MCP configuration will need manual setup"
+fi
+
+# Create Lab 2 test script
+log "Creating Lab 2 test script..."
+cat > "$LAB2_DIR/scripts/test_personas.sh" << 'TEST_EOF'
+#!/bin/bash
+echo "Testing Lab 2: Persona-Based Access with RLS"
+echo "============================================="
+
+source /workshop/.env
+
+echo "Customer View (public only):"
+PGPASSWORD=customer123 psql -h $PGHOST -U customer_user -d $PGDATABASE -c \
+  "SELECT content_type, COUNT(*) FROM knowledge_base GROUP BY content_type;"
+
+echo -e "\nSupport Agent View (public + internal):"
+PGPASSWORD=agent123 psql -h $PGHOST -U agent_user -d $PGDATABASE -c \
+  "SELECT content_type, COUNT(*) FROM knowledge_base GROUP BY content_type;"
+
+echo -e "\nProduct Manager View (everything):"
+PGPASSWORD=pm123 psql -h $PGHOST -U pm_user -d $PGDATABASE -c \
+  "SELECT content_type, COUNT(*) FROM knowledge_base GROUP BY content_type;"
+
+echo -e "\nMCP Context Function Test:"
+psql -c "SELECT jsonb_pretty(get_mcp_context('headphones', 'customer')::jsonb);"
+TEST_EOF
+
+chmod +x "$LAB2_DIR/scripts/test_personas.sh"
+chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$LAB2_DIR/scripts/test_personas.sh"
+
+# Create Streamlit app
+log "Creating Lab 2 Streamlit application..."
+cat > "$LAB2_DIR/lab2_mcp_demo.py" << 'STREAMLIT_EOF'
+"""
+Lab 2: MCP Context Builder with PostgreSQL RLS
+"""
+import streamlit as st
+import psycopg
+from psycopg.rows import dict_row
+import pandas as pd
+import json
+import os
+import boto3
+from datetime import datetime
+
+st.set_page_config(page_title="Lab 2: MCP with RLS", page_icon="🔐", layout="wide")
+
+# Load environment
+DB_HOST = os.getenv('PGHOST')
+DB_NAME = os.getenv('PGDATABASE')
+DB_USER = os.getenv('PGUSER')
+DB_PASSWORD = os.getenv('PGPASSWORD')
+AWS_REGION = os.getenv('AWS_REGION', 'us-west-2')
+
+PERSONAS = {
+    "customer": {"user": "customer_user", "password": "customer123", "icon": "👤"},
+    "support_agent": {"user": "agent_user", "password": "agent123", "icon": "🛠️"},
+    "product_manager": {"user": "pm_user", "password": "pm123", "icon": "📊"}
+}
+
+def get_persona_connection(persona):
+    config = PERSONAS[persona]
+    return psycopg.connect(
+        host=DB_HOST, dbname=DB_NAME,
+        user=config['user'], password=config['password'],
+        row_factory=dict_row
+    )
+
+def search_with_persona(query, persona):
+    with get_persona_connection(persona) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT k.*, p.product_description
+                FROM knowledge_base k
+                LEFT JOIN bedrock_integration.product_catalog p ON k.product_id = p."productId"
+                WHERE k.content ILIKE %s OR p.product_description ILIKE %s
+                LIMIT 10
+            """, (f'%{query}%', f'%{query}%'))
+            return cur.fetchall()
+
+st.title("🔐 Lab 2: MCP Context Builder with RLS")
+
+col1, col2 = st.columns([1, 3])
+with col1:
+    persona = st.selectbox("Select Persona", list(PERSONAS.keys()))
+    st.info(f"{PERSONAS[persona]['icon']} Access Level")
+
+with col2:
+    query = st.text_input("Search Query", placeholder="Try 'headphones' or 'bluetooth'")
+    if st.button("Search with MCP"):
+        with st.spinner(f"Searching as {persona}..."):
+            results = search_with_persona(query, persona)
+            st.success(f"Found {len(results)} results")
+            for r in results:
+                with st.expander(f"{r['content_type']} - {r.get('created_at', 'N/A')}"):
+                    st.write(r['content'][:500])
+
+# MCP Configuration Display
+with st.expander("🔧 MCP Configuration for this setup"):
+    cluster_arn = os.getenv('DATABASE_CLUSTER_ARN', '[your-cluster-arn]')
+    secret_arn = os.getenv('DB_SECRET_ARN', '[your-secret-arn]')
+    st.code(f"""
+{{
+  "mcpServers": {{
+    "awslabs.postgres-mcp-server": {{
+      "command": "uvx",
+      "args": [
+        "awslabs.postgres-mcp-server@latest",
+        "--resource_arn", "{cluster_arn}",
+        "--secret_arn", "{secret_arn}",
+        "--database", "workshop_db",
+        "--region", "us-west-2",
+        "--readonly", "True"
+      ],
+      "env": {{
+        "AWS_PROFILE": "default",
+        "AWS_REGION": "us-west-2",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }}
+    }}
+  }}
+}}
+    """, language="json")
+STREAMLIT_EOF
+
+chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$LAB2_DIR/lab2_mcp_demo.py"
+
+# Create Lab 2 README
+log "Creating Lab 2 README..."
+cat > "$LAB2_DIR/README.md" << 'README_EOF'
+# Lab 2: MCP with PostgreSQL RLS
+
+## Quick Start
+
+1. **Test RLS with personas:**
+   ```bash
+   ./scripts/test_personas.sh
+   ```
+
+2. **Run Streamlit UI:**
+   ```bash
+   streamlit run lab2_mcp_demo.py --server.port 8502
+   ```
+
+3. **Test MCP with uvx:**
+   ```bash
+   uvx awslabs.postgres-mcp-server@latest \
+     --resource_arn $DATABASE_CLUSTER_ARN \
+     --secret_arn $DB_SECRET_ARN \
+     --database $PGDATABASE \
+     --region $AWS_REGION \
+     --readonly True \
+     --test-connection
+   ```
+
+## Key Concepts
+
+1. **RLS (Row Level Security)**: Database automatically filters data by user role
+2. **Vector JOINs**: Reuse Lab 1 embeddings - no duplication!
+3. **MCP vs RAG**: Structured, filtered context vs document retrieval
+
+## Personas
+
+- **Customer**: Public FAQs only
+- **Support Agent**: FAQs + Tickets + Internal Notes
+- **Product Manager**: Everything including analytics
+
+## Database Credentials
+
+- Customer: `customer_user` / `customer123`
+- Agent: `agent_user` / `agent123`
+- Manager: `pm_user` / `pm123`
+README_EOF
+
+chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$LAB2_DIR/README.md"
+
+log "✅ Lab 2 setup complete!"
+log "   - Database objects created with RLS"
+log "   - MCP configuration generated"
+log "   - Streamlit app ready"
+log "   - Test scripts available"
+log "   - Run: cd $LAB2_DIR && streamlit run lab2_mcp_demo.py"
+
+log "==================== End Lab 2 Setup Section ===================="
 
 # ===========================================================================
 # FINAL VALIDATION
@@ -2288,69 +2605,74 @@ else
     warn "❌ DB_NAME not set"
 fi
 
-# Validate .env file
-log "Validating .env file..."
-if [ -f "$HOME_FOLDER/.env" ]; then
-    log "✅ .env file exists at $HOME_FOLDER/.env"
+# Validate Lab 2 Setup
+log "Validating Lab 2 setup..."
+if [ -d "$LAB2_DIR" ]; then
+    log "✅ Lab 2 directory exists: $LAB2_DIR"
     
-    # Check contents
-    if grep -q "DB_HOST=" "$HOME_FOLDER/.env" && \
-       grep -q "DB_USER=" "$HOME_FOLDER/.env" && \
-       grep -q "DB_PASSWORD=" "$HOME_FOLDER/.env" && \
-       grep -q "DB_NAME=" "$HOME_FOLDER/.env"; then
-        log "✅ .env file contains all required database variables"
+    if [ -f "$LAB2_DIR/mcp_config.json" ]; then
+        log "✅ MCP configuration file created"
     else
-        warn "⚠️  .env file missing some database variables"
+        warn "⚠️ MCP configuration file missing"
+    fi
+    
+    if [ -f "$LAB2_DIR/lab2_mcp_demo.py" ]; then
+        log "✅ Streamlit app created"
+    else
+        warn "⚠️ Streamlit app missing"
+    fi
+    
+    # Check if Lab 2 database objects were created
+    if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
+        KB_EXISTS=$(sudo -u "$CODE_EDITOR_USER" \
+            PGHOST="$DB_HOST" \
+            PGPORT="$DB_PORT" \
+            PGDATABASE="$DB_NAME" \
+            PGUSER="$DB_USER" \
+            PGPASSWORD="$DB_PASSWORD" \
+            psql -t -c "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='knowledge_base');" 2>/dev/null | xargs)
+        
+        if [ "$KB_EXISTS" = "t" ]; then
+            log "✅ Lab 2 knowledge_base table created"
+            
+            # Check RLS policies
+            POLICIES=$(sudo -u "$CODE_EDITOR_USER" \
+                PGHOST="$DB_HOST" \
+                PGPORT="$DB_PORT" \
+                PGDATABASE="$DB_NAME" \
+                PGUSER="$DB_USER" \
+                PGPASSWORD="$DB_PASSWORD" \
+                psql -t -c "SELECT COUNT(*) FROM pg_policies WHERE tablename='knowledge_base';" 2>/dev/null | xargs)
+            
+            if [ ! -z "$POLICIES" ] && [ "$POLICIES" -gt 0 ]; then
+                log "✅ RLS policies created: $POLICIES policies"
+            else
+                warn "⚠️ No RLS policies found"
+            fi
+        else
+            warn "⚠️ Lab 2 knowledge_base table not found"
+        fi
     fi
 else
-    warn "❌ .env file not found at $HOME_FOLDER/.env"
-fi
-
-# Validate .pgpass file
-if [ -f "/home/$CODE_EDITOR_USER/.pgpass" ]; then
-    log "✅ .pgpass file exists"
-else
-    warn "❌ .pgpass file not found"
+    warn "❌ Lab 2 directory not found"
 fi
 
 # Validate Database Connection and Components
 if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
-    log "Validating database connection and components..."
+    log "Validating database components..."
     
-    # Test database connectivity
+    # Test connection
     if sudo -u "$CODE_EDITOR_USER" \
         PGHOST="$DB_HOST" \
         PGPORT="$DB_PORT" \
         PGDATABASE="$DB_NAME" \
         PGUSER="$DB_USER" \
         PGPASSWORD="$DB_PASSWORD" \
-        psql -c "SELECT 1;" &>/dev/null; then
+        psql -c "SELECT 'Connection test successful';" &>/dev/null; then
+        
         log "✅ Database connection successful"
         
-        # Check PostgreSQL extensions
-        log "Checking PostgreSQL extensions..."
-        EXTENSIONS=$(sudo -u "$CODE_EDITOR_USER" \
-            PGHOST="$DB_HOST" \
-            PGPORT="$DB_PORT" \
-            PGDATABASE="$DB_NAME" \
-            PGUSER="$DB_USER" \
-            PGPASSWORD="$DB_PASSWORD" \
-            psql -t -c "SELECT extname FROM pg_extension WHERE extname IN ('vector', 'pg_trgm');" 2>/dev/null | xargs)
-        
-        if echo "$EXTENSIONS" | grep -q "vector"; then
-            log "✅ pgvector extension installed"
-        else
-            warn "❌ pgvector extension not found"
-        fi
-        
-        if echo "$EXTENSIONS" | grep -q "pg_trgm"; then
-            log "✅ pg_trgm extension installed"
-        else
-            warn "❌ pg_trgm extension not found"
-        fi
-        
         # Check schema
-        log "Checking database schema..."
         SCHEMA_EXISTS=$(sudo -u "$CODE_EDITOR_USER" \
             PGHOST="$DB_HOST" \
             PGPORT="$DB_PORT" \
@@ -2365,15 +2687,14 @@ if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
             warn "❌ Schema 'bedrock_integration' not found"
         fi
         
-        # Check table
-        log "Checking product_catalog table..."
+        # Check product_catalog table
         TABLE_EXISTS=$(sudo -u "$CODE_EDITOR_USER" \
             PGHOST="$DB_HOST" \
             PGPORT="$DB_PORT" \
             PGDATABASE="$DB_NAME" \
             PGUSER="$DB_USER" \
             PGPASSWORD="$DB_PASSWORD" \
-            psql -t -c "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = 'bedrock_integration' AND table_name = 'product_catalog');" 2>/dev/null | xargs)
+            psql -t -c "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema='bedrock_integration' AND table_name='product_catalog');" 2>/dev/null | xargs)
         
         if [ "$TABLE_EXISTS" = "t" ]; then
             log "✅ Table 'product_catalog' exists"
@@ -2390,7 +2711,7 @@ if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
             if [ ! -z "$ROW_COUNT" ] && [ "$ROW_COUNT" -gt 0 ]; then
                 log "✅ Data loaded: $ROW_COUNT products"
             else
-                warn "⚠️  Table exists but no data loaded (count: $ROW_COUNT)"
+                warn "⚠️ Table exists but no data loaded (count: $ROW_COUNT)"
             fi
             
             # Check for embeddings
@@ -2405,42 +2726,17 @@ if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
             if [ ! -z "$EMBEDDING_COUNT" ] && [ "$EMBEDDING_COUNT" -gt 0 ]; then
                 log "✅ Embeddings present: $EMBEDDING_COUNT products with embeddings"
             else
-                warn "⚠️  No embeddings found in table"
+                warn "⚠️ No embeddings found in table"
             fi
         else
             warn "❌ Table 'product_catalog' not found"
-        fi
-        
-        # Check indexes
-        log "Checking indexes..."
-        INDEXES=$(sudo -u "$CODE_EDITOR_USER" \
-            PGHOST="$DB_HOST" \
-            PGPORT="$DB_PORT" \
-            PGDATABASE="$DB_NAME" \
-            PGUSER="$DB_USER" \
-            PGPASSWORD="$DB_PASSWORD" \
-            psql -t -c "SELECT indexname FROM pg_indexes WHERE schemaname = 'bedrock_integration' AND tablename = 'product_catalog';" 2>/dev/null | wc -l)
-        
-        if [ ! -z "$INDEXES" ] && [ "$INDEXES" -gt 0 ]; then
-            log "✅ Indexes created: $INDEXES indexes on product_catalog"
-            
-            # List specific indexes
-            sudo -u "$CODE_EDITOR_USER" \
-                PGHOST="$DB_HOST" \
-                PGPORT="$DB_PORT" \
-                PGDATABASE="$DB_NAME" \
-                PGUSER="$DB_USER" \
-                PGPASSWORD="$DB_PASSWORD" \
-                psql -t -c "SELECT '   - ' || indexname FROM pg_indexes WHERE schemaname = 'bedrock_integration' AND tablename = 'product_catalog';" 2>/dev/null || true
-        else
-            warn "⚠️  No indexes found on product_catalog table"
         fi
         
     else
         warn "❌ Database connection failed - cannot validate components"
     fi
 else
-    warn "⚠️  Database credentials not available - skipping database validation"
+    warn "⚠️ Database credentials not available - skipping database validation"
 fi
 
 # Show final status
@@ -2456,13 +2752,13 @@ echo "  .bashrc updated: ✅ Yes"
 echo ""
 echo "🐍 PYTHON & EXTENSIONS:"
 echo "  Python version: $(python3.13 --version 2>/dev/null || echo 'Not found')"
-echo "  VS Code Extensions: $( [ -d "/home/$CODE_EDITOR_USER/.code-editor-server/extensions/ms-python.python" ] && echo "✅ Installed" || echo "⚠️  Check installation" )"
+echo "  VS Code Extensions: $( [ -d "/home/$CODE_EDITOR_USER/.code-editor-server/extensions/ms-python.python" ] && echo "✅ Installed" || echo "⚠️ Check installation" )"
 echo "  Jupyter Kernel: ✅ Python 3.13 (default)"
 echo ""
 echo "🔒 SECURITY:"
 echo "  Git Commits: ❌ Disabled (read-only mode)"
 echo ""
-echo "🗄️  DATABASE:"
+echo "🗄️ DATABASE:"
 if [ ! -z "$DB_HOST" ]; then
     echo "  Host: $DB_HOST"
     echo "  Database: $DB_NAME"
@@ -2474,25 +2770,35 @@ if [ ! -z "$DB_HOST" ]; then
         echo "  Table: ✅ product_catalog"
         echo "  Data: ✅ $ROW_COUNT products loaded"
         echo "  Embeddings: ✅ $EMBEDDING_COUNT with embeddings"
-        echo "  Indexes: ✅ $INDEXES indexes created"
         echo "  Extensions: vector, pg_trgm"
     else
-        echo "  Status: ⚠️  Check $HOME_FOLDER/data_loader.log"
+        echo "  Status: ⚠️ Check $HOME_FOLDER/data_loader.log"
     fi
 else
     echo "  Status: ❌ Not configured"
 fi
+echo ""
+echo "🚀 LAB 2 SETUP:"
+if [ -d "$LAB2_DIR" ]; then
+    echo "  Directory: ✅ $LAB2_DIR"
+    echo "  MCP Config: $( [ -f "$LAB2_DIR/mcp_config.json" ] && echo "✅ Created" || echo "⚠️ Missing" )"
+    echo "  Streamlit App: $( [ -f "$LAB2_DIR/lab2_mcp_demo.py" ] && echo "✅ Ready" || echo "⚠️ Missing" )"
+    echo "  Knowledge Base: $( [ "$KB_EXISTS" = "t" ] && echo "✅ Table created" || echo "⚠️ Not created" )"
+    echo "  RLS Policies: $( [ ! -z "$POLICIES" ] && [ "$POLICIES" -gt 0 ] && echo "✅ $POLICIES policies" || echo "⚠️ Not configured" )"
+    echo "  Test Script: $( [ -f "$LAB2_DIR/scripts/test_personas.sh" ] && echo "✅ Available" || echo "⚠️ Missing" )"
+else
+    echo "  Status: ❌ Not set up"
+fi
 
 log ""
 log "Listening ports:"
-ss -tlpn | grep -E ":(80|8080)" || warn "No services listening on expected ports"
+ss -tlpn | grep -E ":(80|8080|8501|8502)" || warn "No services listening on expected ports"
 
 log ""
 log "============================================================"
 log "✅ Bootstrap completed successfully!"
 log "Code Editor URL: Use CloudFront URL with token: $CODE_EDITOR_PASSWORD"
 log "Database: Configured with credentials from Secrets Manager"
-log "Extensions: Python and Jupyter VS Code extensions installed"
-log "Git: Read-only mode (commits disabled)"
-log "Jupyter: Python 3.13 kernel pre-selected as default"
+log "Lab 1: 21,704 products loaded with embeddings"
+log "Lab 2: MCP with RLS setup complete"
 log "============================================================"
