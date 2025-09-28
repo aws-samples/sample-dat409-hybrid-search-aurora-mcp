@@ -71,6 +71,10 @@ fi
 log "==================== Lab 1: Creating Schema and Tables ===================="
 
 PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" << 'LAB1_SCHEMA'
+-- Create extensions
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- Create bedrock_integration schema
 CREATE SCHEMA IF NOT EXISTS bedrock_integration;
 
