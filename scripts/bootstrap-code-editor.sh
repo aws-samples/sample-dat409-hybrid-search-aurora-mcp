@@ -1824,6 +1824,407 @@ fi
 
 log "==================== End Database Loading Section ===================="
 
+# Create Lab 2 database setup script with 50 HARDCODED product IDs
+log "Creating Lab 2 database setup script with 50 deterministic products..."
+cat > "$LAB2_DIR/setup/lab2_database_setup.sql" << 'SQL_EOF'
+-- ============================================================
+-- LAB 2: MCP with PostgreSQL RLS - 50 Product Setup
+-- Uses hardcoded product IDs from high-volume products
+-- ============================================================
+
+-- 1. Create knowledge_base table (reuses embeddings via JOIN)
+DROP TABLE IF EXISTS public.knowledge_base CASCADE;
+CREATE TABLE public.knowledge_base (
+    id SERIAL PRIMARY KEY,
+    product_id VARCHAR(255),
+    content TEXT NOT NULL,
+    content_type VARCHAR(50) NOT NULL,
+    persona_access VARCHAR(50)[] NOT NULL,
+    severity VARCHAR(20),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    metadata JSONB DEFAULT '{}',
+    
+    CONSTRAINT fk_product 
+        FOREIGN KEY (product_id) 
+        REFERENCES bedrock_integration.product_catalog("productId")
+        ON DELETE CASCADE
+);
+
+-- Create indexes
+CREATE INDEX idx_kb_product_id ON knowledge_base(product_id);
+CREATE INDEX idx_kb_persona_access ON knowledge_base USING GIN (persona_access);
+CREATE INDEX idx_kb_content_type ON knowledge_base(content_type);
+CREATE INDEX idx_kb_created_at ON knowledge_base(created_at DESC);
+CREATE INDEX idx_kb_content_fts ON knowledge_base USING GIN (to_tsvector('english', content));
+
+-- 2. Create RLS roles and policies
+DROP ROLE IF EXISTS customer_role CASCADE;
+DROP ROLE IF EXISTS support_agent_role CASCADE;
+DROP ROLE IF EXISTS product_manager_role CASCADE;
+DROP USER IF EXISTS customer_user;
+DROP USER IF EXISTS agent_user;
+DROP USER IF EXISTS pm_user;
+
+CREATE ROLE customer_role;
+CREATE ROLE support_agent_role;
+CREATE ROLE product_manager_role;
+
+CREATE USER customer_user WITH PASSWORD 'customer123' IN ROLE customer_role;
+CREATE USER agent_user WITH PASSWORD 'agent123' IN ROLE support_agent_role;
+CREATE USER pm_user WITH PASSWORD 'pm123' IN ROLE product_manager_role;
+
+GRANT USAGE ON SCHEMA public TO customer_role, support_agent_role, product_manager_role;
+GRANT USAGE ON SCHEMA bedrock_integration TO customer_role, support_agent_role, product_manager_role;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO customer_role, support_agent_role, product_manager_role;
+GRANT SELECT ON bedrock_integration.product_catalog TO customer_role, support_agent_role, product_manager_role;
+
+ALTER TABLE knowledge_base ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY customer_access_policy ON knowledge_base
+    FOR SELECT TO customer_role
+    USING ('customer' = ANY(persona_access));
+
+CREATE POLICY agent_access_policy ON knowledge_base
+    FOR SELECT TO support_agent_role
+    USING ('support_agent' = ANY(persona_access) OR 'customer' = ANY(persona_access));
+
+CREATE POLICY pm_access_policy ON knowledge_base
+    FOR SELECT TO product_manager_role
+    USING (true);
+
+CREATE POLICY app_user_policy ON knowledge_base
+    FOR ALL TO workshop_admin
+    USING (true) WITH CHECK (true);
+
+-- 3. Populate with 50 HARDCODED product IDs
+DO $$
+DECLARE
+    -- All 50 product IDs from your query - deterministic results
+    product_ids TEXT[] := ARRAY[
+        -- Security Cameras (Top 20 by reviews)
+        'B07X6C9RMF', -- Blink Mini (260K reviews)
+        'B08N5NQ869', -- Ring Video Doorbell (173K reviews)
+        'B086DL32R3', -- Blink Outdoor (157K reviews)
+        'B08SGC46M9', -- Blink Video Doorbell + Sync (112K reviews)
+        'B07DGR98VQ', -- Wyze Cam Pan/Tilt (76K reviews)
+        'B08R59YH7W', -- WYZE Cam v3 (72K reviews)
+        'B08CKHPP52', -- Ring Doorbell Wired (71K reviews)
+        'B08M125RNW', -- Ring Doorbell Pro (46K reviews)
+        'B0849J7W5X', -- Ring Doorbell 3 (44K reviews)
+        'B08F6GPQQ7', -- Ring Floodlight Cam (30K reviews)
+        'B08FD54PN9', -- Kami Security Camera 4PCS (38K reviews)
+        'B07QKXM2D3', -- wansview Wireless Security (35K reviews)
+        'B01CW4CEMS', -- YI 4pc Security Home Camera (35K reviews)
+        'B07X27JNQ5', -- Blink Indoor 3rd Gen (25K reviews)
+        'B07ZB2RNTW', -- Ring Alarm Contact Sensor (25K reviews)
+        'B07YB8HZ8T', -- blurams Security Camera (25K reviews)
+        'B08ZXJJTYJ', -- Kasa 2K QHD Security (23K reviews)
+        'B0829KDY9X', -- TP-Link Tapo Pan/Tilt (22K reviews)
+        'B093DDPDXL', -- ZUMIMALL Security Cameras (22K reviews)
+        'B07PM2NBGT', -- ZUMIMALL Alternate SKU (22K reviews)
+        
+        -- Smart Home Devices (5)
+        'B07TTH5TMW', -- SwitchBot Hub Mini (46K reviews)
+        'B07B7NXV4R', -- SwitchBot Button Pusher (26K reviews)
+        'B011MYEMKQ', -- Ring Chime (22K reviews)
+        'B07YP9VK7Q', -- Ring A19 Smart LED Bulb (10K reviews)
+        'B07ZB2QF2V', -- Ring Alarm Motion Detector (10K reviews)
+        
+        -- Personal Care Products (7)
+        'B0CFR1JB15', -- Crystal Hair Eraser (12K reviews)
+        'B00HT6E2NY', -- Schick Hydro Silk (12K reviews)
+        'B0CBJRXFVJ', -- Laser Hair Removal (11K reviews)
+        'B00PBGQ0SY', -- Gillette Venus (10K reviews)
+        'B0168MB1RO', -- Gillette Venus Sensitive (9K reviews)
+        'B0CBJRXFVJ', -- Laser Hair Removal Device (11K reviews)
+        'B00HT6E2NY', -- Schick Hydro Silk Razor (12K reviews)
+        
+        -- Vacuum Cleaners (5)
+        'B0C8JGHXXB', -- Foppapedretti Cordless (15K reviews)
+        'B0C8JDM69N', -- Foppapedretti Hand Vacuum (15K reviews)
+        'B0C2PXPWMR', -- Foppapedretti 25Kpa (15K reviews)
+        'B0C8JK6TSH', -- Cordless Handheld Vacuum (15K reviews)
+        'B0C3RKQPHR', -- Foppapedretti 6 in 1 (15K reviews)
+        
+        -- Additional Security Cameras to reach 50
+        'B07GG3XXNX', -- Certified Refurbished Ring (18K reviews)
+        'B0899GLP7R', -- NETVUE Indoor Camera (18K reviews)
+        'B07PJ67CKC', -- nooie Baby Monitor (18K reviews)
+        'B088C4NHRS', -- Petcube Cam (17K reviews)
+        'B07WHMQNPC', -- Ring Peephole Cam (17K reviews)
+        'B07YMV9VMT', -- Arlo Essential Doorbell (16K reviews)
+        'B07ZPMCW64', -- Ring Alarm 8-piece kit (16K reviews)
+        'B0856W45VL', -- eufy Security Indoor Cam (15K reviews)
+        'B07W1HKYQK', -- eufy Security eufyCam (13K reviews)
+        'B07R3WY95C', -- eufy Security Wi-Fi Doorbell (12K reviews)
+        'B01CW49AGG', -- YI Security Camera Outdoor (12K reviews)
+        'B07X81M2D2', -- REOLINK Wireless Security (11K reviews)
+        'B07X2M8KTR', -- Outdoor Camera 1080P (9K reviews)
+        'B08JCS7QKL', -- LaView Security 4pcs (9K reviews)
+        'B083GKZWVX'  -- XTU WiFi Video Doorbell (9K reviews)
+    ];
+    
+    pid TEXT;
+    product_desc TEXT;
+    product_price NUMERIC;
+    product_stars NUMERIC;
+    product_reviews INT;
+    ticket_num INT := 80000;
+    idx INT := 0;
+BEGIN
+    -- Clear existing data
+    DELETE FROM knowledge_base;
+    
+    RAISE NOTICE 'Populating knowledge base with 50 deterministic products...';
+    
+    -- Process each product
+    FOREACH pid IN ARRAY product_ids
+    LOOP
+        idx := idx + 1;
+        
+        -- Get product details
+        SELECT 
+            LEFT(product_description, 100),
+            price,
+            stars,
+            reviews
+        INTO product_desc, product_price, product_stars, product_reviews
+        FROM bedrock_integration.product_catalog 
+        WHERE "productId" = pid;
+        
+        -- Skip if product not found
+        IF product_desc IS NULL THEN
+            CONTINUE;
+        END IF;
+        
+        -- Generate support content based on product characteristics
+        
+        -- 1. FAQs (all personas can see) - Everyone gets at least one
+        INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+        VALUES (
+            pid,
+            CASE 
+                WHEN product_desc ILIKE '%camera%' OR product_desc ILIKE '%doorbell%' THEN
+                    format('Q: How do I connect my %s to WiFi? A: Open the app, select Add Device, and follow the on-screen setup. Ensure 2.4GHz WiFi is enabled.', LEFT(product_desc, 30))
+                WHEN product_desc ILIKE '%vacuum%' THEN
+                    format('Q: How often should I clean the filters? A: Clean filters every 2 weeks for optimal performance. Replace HEPA filter every 6 months.')
+                WHEN product_desc ILIKE '%hair%' OR product_desc ILIKE '%razor%' THEN
+                    format('Q: How long do the blades last? A: Replace blades every 5-7 shaves for best results. Proper cleaning extends blade life.')
+                ELSE
+                    format('Q: What warranty covers this product? A: Standard 1-year manufacturer warranty. Register within 30 days for extended coverage.')
+            END,
+            'product_faq',
+            ARRAY['customer', 'support_agent', 'product_manager'],
+            'low'
+        );
+        
+        -- 2. Support Tickets (agents/managers) - For products with many reviews or lower ratings
+        IF product_reviews > 20000 OR product_stars < 4.3 THEN
+            ticket_num := ticket_num + 1;
+            INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity, created_at)
+            VALUES (
+                pid,
+                CASE 
+                    WHEN product_stars < 4.2 THEN
+                        format('Ticket #%s: Multiple connection issues reported. Firmware v2.5.1 causing dropouts. Rollback recommended.', ticket_num)
+                    WHEN product_reviews > 100000 THEN
+                        format('Ticket #%s: High volume of "device offline" reports after recent app update. Engineering investigating.', ticket_num)
+                    ELSE
+                        format('Ticket #%s: Compatibility issues with newer routers. Workaround: Disable WPA3, use WPA2 only.', ticket_num)
+                END,
+                'support_ticket',
+                ARRAY['support_agent', 'product_manager'],
+                CASE WHEN product_stars < 4.2 THEN 'high' ELSE 'medium' END,
+                NOW() - (random() * INTERVAL '7 days')
+            );
+        END IF;
+        
+        -- 3. Internal Notes (agents/managers) - For high-volume or problematic products
+        IF product_reviews > 50000 OR product_price > 100 THEN
+            INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+            VALUES (
+                pid,
+                CASE 
+                    WHEN product_reviews > 100000 THEN
+                        'INTERNAL: High-volume product. Escalate unresolved issues after 2 attempts. Premium support available.'
+                    WHEN product_price > 150 THEN
+                        format('INTERNAL: High-value item ($%.2f). Offer expedited replacement for DOA. Manager approval for refunds over $100.', product_price)
+                    ELSE
+                        'INTERNAL: Check batch numbers for units manufactured between Jan-Mar 2024. Known QC issues.'
+                END,
+                'internal_note',
+                ARRAY['support_agent', 'product_manager'],
+                'medium'
+            );
+        END IF;
+        
+        -- 4. Analytics (managers only) - For top products
+        IF idx <= 20 THEN  -- Top 20 products get analytics
+            INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity, created_at)
+            VALUES (
+                pid,
+                format('ANALYTICS: Rank #%s in category. %s reviews, %.1f stars. Return rate: %.1f%%. NPS: %s',
+                    idx,
+                    product_reviews,
+                    product_stars,
+                    CASE WHEN product_stars < 4.3 THEN 5.2 ELSE 2.8 END,
+                    CASE WHEN product_stars >= 4.5 THEN 'Excellent' ELSE 'Good' END
+                ),
+                'analytics',
+                ARRAY['product_manager'],
+                'low',
+                NOW() - INTERVAL '14 days'
+            );
+        END IF;
+        
+        -- 5. Additional FAQ for popular products
+        IF product_reviews > 30000 THEN
+            INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+            VALUES (
+                pid,
+                CASE 
+                    WHEN product_desc ILIKE '%ring%' THEN
+                        'Q: Do I need a Ring Protect subscription? A: Basic features work without subscription. Recording and storage require Ring Protect.'
+                    WHEN product_desc ILIKE '%blink%' THEN
+                        'Q: How long do batteries last? A: Up to 2 years with normal use (5-10 events per day). High-traffic areas drain faster.'
+                    WHEN product_desc ILIKE '%wyze%' THEN
+                        'Q: Is there a monthly fee? A: Basic features are free. Cam Plus adds AI detection and unlimited cloud storage.'
+                    ELSE
+                        'Q: Is professional installation available? A: Self-install is easy with our app. Pro installation available in select areas.'
+                END,
+                'product_faq',
+                ARRAY['customer', 'support_agent', 'product_manager'],
+                'low'
+            );
+        END IF;
+    END LOOP;
+    
+    -- Add general support content not tied to specific products
+    INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity) VALUES
+    (NULL, 'POLICY UPDATE: Extended holiday returns through January 31st for November-December purchases.', 
+     'product_faq', ARRAY['customer', 'support_agent', 'product_manager'], 'low'),
+    (NULL, 'SYSTEM ALERT: AWS us-west-2 latency affecting smart home device connections. ETR: 2 hours.', 
+     'internal_note', ARRAY['support_agent', 'product_manager'], 'high'),
+    (NULL, 'TRAINING: New troubleshooting workflow for connectivity issues. Complete by EOW.', 
+     'internal_note', ARRAY['support_agent', 'product_manager'], 'medium'),
+    (NULL, 'COMPETITIVE INTEL: Amazon Prime Day pricing expected to drop 20-30% on security cameras.', 
+     'analytics', ARRAY['product_manager'], 'medium'),
+    (NULL, 'Q: How do I reset my device to factory settings? A: Hold reset button for 10 seconds until LED flashes.', 
+     'product_faq', ARRAY['customer', 'support_agent', 'product_manager'], 'low');
+    
+    RAISE NOTICE 'Knowledge base populated with % products', idx;
+    RAISE NOTICE 'Total entries created: %', (SELECT COUNT(*) FROM knowledge_base);
+END $$;
+
+-- 4. Create MCP helper function
+CREATE OR REPLACE FUNCTION get_mcp_context(
+    p_query_text TEXT,
+    p_persona TEXT DEFAULT 'customer',
+    p_time_window INTERVAL DEFAULT NULL,
+    p_limit INT DEFAULT 10
+) RETURNS JSON AS $$
+DECLARE
+    v_result JSON;
+    v_embedding vector;
+BEGIN
+    -- Set role based on persona
+    CASE p_persona
+        WHEN 'customer' THEN EXECUTE 'SET ROLE customer_role';
+        WHEN 'support_agent' THEN EXECUTE 'SET ROLE support_agent_role';
+        WHEN 'product_manager' THEN EXECUTE 'SET ROLE product_manager_role';
+        ELSE EXECUTE 'SET ROLE customer_role';
+    END CASE;
+    
+    -- Try to get an embedding for semantic search
+    SELECT embedding INTO v_embedding
+    FROM bedrock_integration.product_catalog 
+    WHERE product_description ILIKE '%' || p_query_text || '%'
+    LIMIT 1;
+    
+    -- Query with JOIN to products and automatic RLS filtering
+    WITH filtered_content AS (
+        SELECT 
+            k.id,
+            k.content,
+            k.content_type,
+            k.severity,
+            k.created_at,
+            k.product_id,
+            p.product_description,
+            p.price,
+            p.stars,
+            p.reviews,
+            CASE 
+                WHEN v_embedding IS NOT NULL AND p.embedding IS NOT NULL THEN
+                    p.embedding <=> v_embedding
+                ELSE 1.0
+            END as semantic_distance,
+            ts_rank(to_tsvector('english', k.content), plainto_tsquery('english', p_query_text)) as text_rank
+        FROM knowledge_base k
+        LEFT JOIN bedrock_integration.product_catalog p ON k.product_id = p."productId"
+        WHERE (
+            k.content ILIKE '%' || p_query_text || '%'
+            OR p.product_description ILIKE '%' || p_query_text || '%'
+        )
+        AND (p_time_window IS NULL OR k.created_at >= NOW() - p_time_window)
+        ORDER BY 
+            CASE 
+                WHEN v_embedding IS NOT NULL THEN semantic_distance
+                ELSE text_rank
+            END DESC
+        LIMIT p_limit
+    )
+    SELECT json_agg(
+        json_build_object(
+            'id', id,
+            'content', content,
+            'type', content_type,
+            'severity', severity,
+            'created_at', created_at,
+            'product', product_description,
+            'price', price,
+            'stars', stars,
+            'reviews', reviews
+        ) ORDER BY semantic_distance
+    ) INTO v_result FROM filtered_content;
+    
+    -- Reset role
+    RESET ROLE;
+    
+    RETURN COALESCE(v_result, '[]'::JSON);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 5. Verification
+SELECT 'Setup complete. Verifying...' as status;
+
+-- Show summary
+SELECT 
+    content_type,
+    COUNT(*) as entries,
+    COUNT(DISTINCT product_id) as products
+FROM knowledge_base
+GROUP BY content_type
+ORDER BY entries DESC;
+
+-- Verify products with most support content
+SELECT 
+    p.product_description,
+    COUNT(k.id) as support_items,
+    array_agg(DISTINCT k.content_type) as content_types
+FROM bedrock_integration.product_catalog p
+INNER JOIN knowledge_base k ON p."productId" = k.product_id
+GROUP BY p."productId", p.product_description
+ORDER BY support_items DESC
+LIMIT 10;
+
+RAISE NOTICE 'Lab 2 database setup complete with 50 hardcoded products!';
+SQL_EOF
+
+chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$LAB2_DIR/setup/lab2_database_setup.sql"
+log "✅ Lab 2 database setup script created with 50 deterministic products"
+
 # ===========================================================================
 # FINAL VALIDATION
 # ===========================================================================
