@@ -51,7 +51,6 @@ else
 fi
 
 # Test Bedrock access
-# Test Bedrock access
 log "Testing Bedrock access..."
 BODY_JSON='{"texts":["test"],"input_type":"search_document","embedding_types":["float"],"truncate":"END"}'
 BODY_BASE64=$(echo "$BODY_JSON" | base64)
