@@ -414,14 +414,6 @@ if [ -f /workshop/.env ]; then
     source /workshop/.env
     set +a
 fi
-
-# Workshop Welcome Message
-echo ""
-echo "📘 DAT409 Workshop Environment Ready!"
-echo "📊 Database: \$PGDATABASE @ \$PGHOST"
-echo "🔧 Quick commands: psql, workshop, lab1, lab2"
-echo "💡 Test connection: psql -c 'SELECT version();'"
-echo ""
 BASHRC_EOF
         
         log "✅ .bashrc updated with database environment"
