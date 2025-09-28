@@ -55,6 +55,27 @@ dnf install --skip-broken -y curl gnupg whois argon2 unzip nginx openssl jq git 
     python3.13-tkinter gcc gcc-c++ make postgresql16
 check_success "Base packages installation"
 
+# Install AWS CLI v2
+log "Installing AWS CLI v2..."
+cd /tmp
+if [ "$(uname -m)" = "aarch64" ]; then
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
+else
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+fi
+unzip -q awscliv2.zip
+./aws/install --update
+rm -rf awscliv2.zip aws/
+cd -
+
+# Verify AWS CLI installation
+if command -v aws &>/dev/null; then
+    log "✅ AWS CLI installed: $(aws --version)"
+else
+    error "AWS CLI installation failed"
+fi
+check_success "AWS CLI v2 installation"
+
 # Set Python 3.13 as default
 sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 1
 sudo update-alternatives --set python3 /usr/bin/python3.13
