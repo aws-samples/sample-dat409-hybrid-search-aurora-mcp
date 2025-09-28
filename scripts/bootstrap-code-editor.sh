@@ -278,20 +278,32 @@ log "==================== End VS Code Extensions Section ===================="
 # GIT CONFIGURATION - DISABLE COMMITS
 # ===========================================================================
 
-log "==================== Configuring Git (Read-Only) ===================="
+log "Disabling Git commits..."
 
-# Configure Git to be read-only for participant user
-sudo -u "$CODE_EDITOR_USER" bash << 'GIT_CONFIG'
-# Set Git to read-only mode
-git config --global core.editor "echo 'Git commits are disabled in this workshop environment' && false"
-git config --global alias.commit "!echo 'Error: Git commits are disabled in this workshop environment' && false"
-git config --global alias.push "!echo 'Error: Git push is disabled in this workshop environment' && false"
+# Set dummy identity to prevent errors
+sudo -u "$CODE_EDITOR_USER" git config --global user.email "workshop@disabled.local"
+sudo -u "$CODE_EDITOR_USER" git config --global user.name "Workshop User"
 
-# Create a dummy commit message template that prevents commits
-mkdir -p ~/.git-templates
-echo "# Git commits are disabled in this workshop environment" > ~/.git-templates/commit-message.txt
-git config --global commit.template ~/.git-templates/commit-message.txt
-GIT_CONFIG
+# Disable commits via config
+sudo -u "$CODE_EDITOR_USER" git config --global core.editor "false"
+
+# Install Git hooks in workshop directory
+if [ -d "$HOME_FOLDER/.git" ]; then
+    mkdir -p "$HOME_FOLDER/.git/hooks"
+    
+    # Pre-commit hook
+    cat > "$HOME_FOLDER/.git/hooks/pre-commit" << 'EOF'
+#!/bin/bash
+echo "ERROR: Git commits are disabled in this workshop environment"
+exit 1
+EOF
+    chmod +x "$HOME_FOLDER/.git/hooks/pre-commit"
+    
+    # Clean any pending changes
+    cd "$HOME_FOLDER"
+    git reset --hard HEAD 2>/dev/null || true
+    git clean -fd 2>/dev/null || true
+fi
 
 log "✅ Git configured for read-only access (commits disabled)"
 
