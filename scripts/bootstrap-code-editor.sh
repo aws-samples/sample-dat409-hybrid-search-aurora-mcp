@@ -275,41 +275,6 @@ log "VS Code extensions and settings configured"
 log "==================== End VS Code Extensions Section ===================="
 
 # ===========================================================================
-# GIT CONFIGURATION - DISABLE COMMITS
-# ===========================================================================
-
-log "Disabling Git commits..."
-
-# Set dummy identity to prevent errors
-sudo -u "$CODE_EDITOR_USER" git config --global user.email "workshop@disabled.local"
-sudo -u "$CODE_EDITOR_USER" git config --global user.name "Workshop User"
-
-# Disable commits via config
-sudo -u "$CODE_EDITOR_USER" git config --global core.editor "false"
-
-# Install Git hooks in workshop directory
-if [ -d "$HOME_FOLDER/.git" ]; then
-    mkdir -p "$HOME_FOLDER/.git/hooks"
-    
-    # Pre-commit hook
-    cat > "$HOME_FOLDER/.git/hooks/pre-commit" << 'EOF'
-#!/bin/bash
-echo "ERROR: Git commits are disabled in this workshop environment"
-exit 1
-EOF
-    chmod +x "$HOME_FOLDER/.git/hooks/pre-commit"
-    
-    # Clean any pending changes
-    cd "$HOME_FOLDER"
-    git reset --hard HEAD 2>/dev/null || true
-    git clean -fd 2>/dev/null || true
-fi
-
-log "✅ Git configured for read-only access (commits disabled)"
-
-log "==================== End Git Configuration Section ===================="
-
-# ===========================================================================
 # DATABASE CONFIGURATION SECTION (FIXED)
 # ===========================================================================
 
