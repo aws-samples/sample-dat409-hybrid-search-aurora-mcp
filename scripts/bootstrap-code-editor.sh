@@ -270,7 +270,7 @@ log "==================== Installing Python Packages ===================="
 
 log "Installing Lab 1 & 2 Python dependencies..."
 sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
-    pandas numpy boto3 psycopg pgvector tqdm pandarallel \
+    pandas numpy boto3 psycopg pgvector matplotlib seaborn tqdm pandarallel \
     jupyterlab jupyter streamlit plotly kaleido sqlalchemy \
     langchain langchain-community sentence-transformers \
     transformers accelerate einops psycopg-binary langchain-aws \
