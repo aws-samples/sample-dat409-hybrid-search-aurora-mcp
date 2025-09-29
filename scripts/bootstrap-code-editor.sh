@@ -425,6 +425,52 @@ fi
 log "==================== End Database Configuration Section ===================="
 
 # ===========================================================================
+# MCP CONFIGURATION FOR LAB 2
+# ===========================================================================
+
+log "Creating MCP configuration file..."
+
+LAB2_DIR="$HOME_FOLDER/lab2-mcp-agent"
+
+# Build cluster ARN if not provided
+if [ -z "$DB_CLUSTER_ARN" ] && [ ! -z "$DB_HOST" ]; then
+    CLUSTER_ID=$(echo "$DB_HOST" | cut -d'.' -f1)
+    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "123456789012")
+    DB_CLUSTER_ARN="arn:aws:rds:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster:${CLUSTER_ID}"
+fi
+
+# Use actual values or placeholders
+CLUSTER_ARN="${DB_CLUSTER_ARN:-[your-cluster-arn]}"
+SECRET_ARN="${DB_SECRET_ARN:-[your-secret-arn]}"
+
+# Create the config file
+cat > "${LAB2_DIR}/mcp_config.json" << EOF
+{
+  "mcpServers": {
+    "awslabs.postgres-mcp-server": {
+      "command": "uvx",
+      "args": [
+        "awslabs.postgres-mcp-server@latest",
+        "--resource_arn", "${CLUSTER_ARN}",
+        "--secret_arn", "${SECRET_ARN}",
+        "--database", "workshop_db",
+        "--region", "us-west-2",
+        "--readonly", "True"
+      ],
+      "env": {
+        "AWS_PROFILE": "default",
+        "AWS_REGION": "us-west-2",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    }
+  }
+}
+EOF
+
+chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "${LAB2_DIR}/mcp_config.json"
+log "✅ MCP config: ${LAB2_DIR}/mcp_config.json"
+
+# ===========================================================================
 # CREATE HELPER SCRIPTS FOR PARTICIPANTS
 # ===========================================================================
 
@@ -457,7 +503,7 @@ This will:
 - Create all database tables
 - Load 21,704 products with embeddings
 - Set up Lab 2 RLS and knowledge base
-- Take approximately 5-8 minutes
+- Take approximately 3 minutes
 
 ## Quick Verification
 
