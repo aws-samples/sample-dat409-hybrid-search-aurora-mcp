@@ -432,13 +432,17 @@ else
 fi
 
 # ===========================================================================
-# LAB 2: CREATE KNOWLEDGE BASE AND RLS SETUP
+# LAB 2: CREATE KNOWLEDGE BASE AND RLS SETUP WITH ALL 50 PRODUCTS
 # ===========================================================================
 
-log "==================== Lab 2: Creating Knowledge Base and RLS ===================="
+log "==================== Lab 2: Creating Knowledge Base and RLS with 50 Products ===================="
 
 PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" << 'LAB2_SETUP'
--- Create knowledge_base table
+-- ============================================================
+-- LAB 2: MCP with PostgreSQL RLS - Complete 50 Product Setup
+-- ============================================================
+
+-- 1. Create knowledge_base table (reuses embeddings via JOIN)
 DROP TABLE IF EXISTS public.knowledge_base CASCADE;
 CREATE TABLE public.knowledge_base (
     id SERIAL PRIMARY KEY,
@@ -464,8 +468,8 @@ CREATE INDEX idx_kb_content_type ON knowledge_base(content_type);
 CREATE INDEX idx_kb_created_at ON knowledge_base(created_at DESC);
 CREATE INDEX idx_kb_content_fts ON knowledge_base USING GIN (to_tsvector('english', content));
 
--- Create RLS users
-DO $$
+-- 2. Create RLS users
+DO $
 BEGIN
     -- Drop users if they exist
     IF EXISTS (SELECT FROM pg_user WHERE usename = 'customer_user') THEN
@@ -482,70 +486,270 @@ BEGIN
     CREATE USER customer_user WITH PASSWORD 'customer123';
     CREATE USER agent_user WITH PASSWORD 'agent123';
     CREATE USER pm_user WITH PASSWORD 'pm123';
-END $$;
+END $;
 
--- Grant permissions
+-- 3. Grant permissions
 GRANT USAGE ON SCHEMA public TO customer_user, agent_user, pm_user;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO customer_user, agent_user, pm_user;
 GRANT USAGE ON SCHEMA bedrock_integration TO customer_user, agent_user, pm_user;
 GRANT SELECT ON ALL TABLES IN SCHEMA bedrock_integration TO customer_user, agent_user, pm_user;
 
--- Enable RLS
+-- 4. Enable RLS
 ALTER TABLE knowledge_base ENABLE ROW LEVEL SECURITY;
 
--- Create RLS policies
+-- 5. Create RLS policies
 CREATE POLICY customer_policy ON knowledge_base
     FOR SELECT TO customer_user
     USING ('customer' = ANY(persona_access));
 
 CREATE POLICY agent_policy ON knowledge_base
-    FOR SELECT TO agent_user
+    FOR SELECT TO agent_user  
     USING ('customer' = ANY(persona_access) OR 'agent' = ANY(persona_access));
 
 CREATE POLICY pm_policy ON knowledge_base
     FOR SELECT TO pm_user
     USING (true);
 
--- Insert sample knowledge base data for 50 hardcoded products
--- Using deterministic high-volume product IDs
-INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity) VALUES
--- Product 1: B08N5WRWNW (Echo Dot)
-('B08N5WRWNW', 'Echo Dot (Echo Dot 4th Gen) | Smart speaker with Alexa | Glacier White', 'description', ARRAY['customer', 'agent', 'pm'], NULL),
-('B08N5WRWNW', 'Known issue: Device may experience connectivity drops after firmware 2.1.4 update', 'known_issues', ARRAY['agent', 'pm'], 'medium'),
-('B08N5WRWNW', 'Internal: Cost reduction initiative planned for Q3 - exploring cheaper speaker components', 'internal_notes', ARRAY['pm'], NULL),
+-- 6. Populate with ALL 50 HARDCODED product IDs
+DO $
+DECLARE
+    -- All 50 product IDs from high-volume products - deterministic results
+    product_ids TEXT[] := ARRAY[
+        -- Security Cameras (Top 20 by reviews)
+        'B07X6C9RMF', -- Blink Mini (260K reviews)
+        'B08N5NQ869', -- Ring Video Doorbell (173K reviews)
+        'B086DL32R3', -- Blink Outdoor (157K reviews)
+        'B08SGC46M9', -- Blink Video Doorbell + Sync (112K reviews)
+        'B07DGR98VQ', -- Wyze Cam Pan/Tilt (76K reviews)
+        'B08R59YH7W', -- WYZE Cam v3 (72K reviews)
+        'B08CKHPP52', -- Ring Doorbell Wired (71K reviews)
+        'B08M125RNW', -- Ring Doorbell Pro (46K reviews)
+        'B0849J7W5X', -- Ring Doorbell 3 (44K reviews)
+        'B08F6GPQQ7', -- Ring Floodlight Cam (30K reviews)
+        'B08FD54PN9', -- Kami Security Camera 4PCS (38K reviews)
+        'B07QKXM2D3', -- wansview Wireless Security (35K reviews)
+        'B01CW4CEMS', -- YI 4pc Security Home Camera (35K reviews)
+        'B07X27JNQ5', -- Blink Indoor 3rd Gen (25K reviews)
+        'B07ZB2RNTW', -- Ring Alarm Contact Sensor (25K reviews)
+        'B07YB8HZ8T', -- blurams Security Camera (25K reviews)
+        'B08ZXJJTYJ', -- Kasa 2K QHD Security (23K reviews)
+        'B0829KDY9X', -- TP-Link Tapo Pan/Tilt (22K reviews)
+        'B093DDPDXL', -- ZUMIMALL Security Cameras (22K reviews)
+        'B07PM2NBGT', -- ZUMIMALL Alternate SKU (22K reviews)
+        
+        -- Smart Home Devices (5)
+        'B07TTH5TMW', -- SwitchBot Hub Mini (46K reviews)
+        'B07B7NXV4R', -- SwitchBot Button Pusher (26K reviews)
+        'B011MYEMKQ', -- Ring Chime (22K reviews)
+        'B07YP9VK7Q', -- Ring A19 Smart LED Bulb (10K reviews)
+        'B07ZB2QF2V', -- Ring Alarm Motion Detector (10K reviews)
+        
+        -- Personal Care Products (7)
+        'B0CFR1JB15', -- Crystal Hair Eraser (12K reviews)
+        'B00HT6E2NY', -- Schick Hydro Silk (12K reviews)
+        'B0CBJRXFVJ', -- Laser Hair Removal (11K reviews)
+        'B00PBGQ0SY', -- Gillette Venus (10K reviews)
+        'B0168MB1RO', -- Gillette Venus Sensitive (9K reviews)
+        'B0CBJRXFVJ', -- Laser Hair Removal Device (11K reviews)
+        'B00HT6E2NY', -- Schick Hydro Silk Razor (12K reviews)
+        
+        -- Vacuum Cleaners (5)
+        'B0C8JGHXXB', -- Foppapedretti Cordless (15K reviews)
+        'B0C8JDM69N', -- Foppapedretti Hand Vacuum (15K reviews)
+        'B0C2PXPWMR', -- Foppapedretti 25Kpa (15K reviews)
+        'B0C8JK6TSH', -- Cordless Handheld Vacuum (15K reviews)
+        'B0C3RKQPHR', -- Foppapedretti 6 in 1 (15K reviews)
+        
+        -- Additional Security Cameras to reach 50
+        'B07GG3XXNX', -- Certified Refurbished Ring (18K reviews)
+        'B0899GLP7R', -- NETVUE Indoor Camera (18K reviews)
+        'B07PJ67CKC', -- nooie Baby Monitor (18K reviews)
+        'B088C4NHRS', -- Petcube Cam (17K reviews)
+        'B07WHMQNPC', -- Ring Peephole Cam (17K reviews)
+        'B07YMV9VMT', -- Arlo Essential Doorbell (16K reviews)
+        'B07ZPMCW64', -- Ring Alarm 8-piece kit (16K reviews)
+        'B0856W45VL', -- eufy Security Indoor Cam (15K reviews)
+        'B07W1HKYQK', -- eufy Security eufyCam (13K reviews)
+        'B07R3WY95C', -- eufy Security Wi-Fi Doorbell (12K reviews)
+        'B01CW49AGG', -- YI Security Camera Outdoor (12K reviews)
+        'B07X81M2D2', -- REOLINK Wireless Security (11K reviews)
+        'B07X2M8KTR', -- Outdoor Camera 1080P (9K reviews)
+        'B08JCS7QKL', -- LaView Security 4pcs (9K reviews)
+        'B083GKZWVX'  -- XTU WiFi Video Doorbell (9K reviews)
+    ];
+    
+    pid TEXT;
+    product_desc TEXT;
+    product_price NUMERIC;
+    product_stars NUMERIC;
+    product_reviews INT;
+    ticket_num INT := 80000;
+    idx INT := 0;
+BEGIN
+    -- Clear existing data
+    DELETE FROM knowledge_base;
+    
+    RAISE NOTICE 'Populating knowledge base with 50 deterministic products...';
+    
+    -- Process each product
+    FOREACH pid IN ARRAY product_ids
+    LOOP
+        idx := idx + 1;
+        
+        -- Get product details (handle if product doesn't exist in catalog)
+        SELECT 
+            LEFT(product_description, 100),
+            price,
+            stars,
+            reviews
+        INTO product_desc, product_price, product_stars, product_reviews
+        FROM bedrock_integration.product_catalog 
+        WHERE "productId" = pid;
+        
+        -- Skip if product not found
+        IF product_desc IS NULL THEN
+            RAISE NOTICE 'Product % not found in catalog, skipping', pid;
+            CONTINUE;
+        END IF;
+        
+        -- Generate support content based on product characteristics
+        
+        -- 1. FAQs (all personas can see) - Everyone gets at least one
+        INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+        VALUES (
+            pid,
+            CASE 
+                WHEN product_desc ILIKE '%camera%' OR product_desc ILIKE '%doorbell%' THEN
+                    format('Q: How do I connect my %s to WiFi? A: Open the app, select Add Device, and follow the on-screen setup. Ensure 2.4GHz WiFi is enabled.', LEFT(product_desc, 30))
+                WHEN product_desc ILIKE '%vacuum%' THEN
+                    format('Q: How often should I clean the filters? A: Clean filters every 2 weeks for optimal performance. Replace HEPA filter every 6 months.')
+                WHEN product_desc ILIKE '%hair%' OR product_desc ILIKE '%razor%' THEN
+                    format('Q: How long do the blades last? A: Replace blades every 5-7 shaves for best results. Proper cleaning extends blade life.')
+                ELSE
+                    format('Q: What warranty covers this product? A: Standard 1-year manufacturer warranty. Register within 30 days for extended coverage.')
+            END,
+            'product_faq',
+            ARRAY['customer', 'support_agent', 'product_manager'],
+            'low'
+        );
+        
+        -- 2. Support tickets (agents and PMs) - High review products get more tickets
+        IF product_reviews > 20000 THEN
+            INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+            VALUES (
+                pid,
+                format('Ticket #%s: Customer reporting %s. Resolution: %s',
+                    ticket_num + idx,
+                    CASE (idx % 3)
+                        WHEN 0 THEN 'device not responding after update'
+                        WHEN 1 THEN 'connectivity issues with 5GHz WiFi'
+                        ELSE 'app crashes during setup'
+                    END,
+                    CASE (idx % 3)
+                        WHEN 0 THEN 'Rolled back firmware, fix in v2.1.5'
+                        WHEN 1 THEN 'Device only supports 2.4GHz, updated documentation'
+                        ELSE 'App hotfix deployed, advise customer to update'
+                    END
+                ),
+                'support_ticket',
+                ARRAY['support_agent', 'product_manager'],
+                CASE WHEN idx % 3 = 0 THEN 'high' ELSE 'medium' END
+            );
+        END IF;
+        
+        -- 3. Internal notes (PMs only) - Add for popular or problematic products
+        IF product_reviews > 15000 OR product_stars < 4 THEN
+            INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+            VALUES (
+                pid,
+                CASE
+                    WHEN product_stars < 3.5 THEN
+                        format('URGENT: Product has %.1f star rating with %s reviews. Investigate quality issues. Consider recall if defect rate > 5%%.',
+                            product_stars, product_reviews)
+                    WHEN product_reviews > 50000 THEN
+                        format('TOP SELLER: %s reviews, %.1f stars. Maintain inventory levels. Marketing to feature in Prime Day.',
+                            product_reviews, product_stars)
+                    ELSE
+                        format('Monitor return rate (currently %.1f%%). Price elasticity testing at $%.2f shows optimal margin.',
+                            (5 - product_stars) * 2, product_price * 0.9)
+                END,
+                'internal_note',
+                ARRAY['product_manager'],
+                CASE WHEN product_stars < 3.5 THEN 'high' ELSE 'low' END
+            );
+        END IF;
+        
+        -- 4. Analytics (PMs only) - Add for high-value products
+        IF product_price > 50 OR product_reviews > 10000 THEN
+            INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+            VALUES (
+                pid,
+                format('Weekly metrics: %s units sold, %.1f%% conversion rate, $%.2f AOV. %s',
+                    100 + (idx * 17),
+                    3.5 + (product_stars * 0.5),
+                    product_price * 1.2,
+                    CASE
+                        WHEN product_stars >= 4.5 THEN 'Exceeding targets.'
+                        WHEN product_stars >= 3.5 THEN 'Meeting expectations.'
+                        ELSE 'Below target, review needed.'
+                    END
+                ),
+                'analytics',
+                ARRAY['product_manager'],
+                NULL
+            );
+        END IF;
+        
+        -- 5. Additional FAQ for installation/setup products
+        IF product_desc ILIKE '%install%' OR product_desc ILIKE '%setup%' 
+           OR product_desc ILIKE '%doorbell%' OR product_desc ILIKE '%thermostat%' THEN
+            INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+            VALUES (
+                pid,
+                CASE 
+                    WHEN product_desc ILIKE '%doorbell%' THEN
+                        'Q: Do I need existing doorbell wiring? A: Most models work with existing wiring (8-24VAC). Battery options available for homes without wiring.'
+                    WHEN product_desc ILIKE '%thermostat%' THEN
+                        'Q: Is professional installation required? A: C-wire required for power. If unsure about wiring, professional installation recommended.'
+                    ELSE
+                        'Q: How long does installation take? A: Typical installation takes 15-30 minutes. Video guides available in the app.'
+                END,
+                'product_faq',
+                ARRAY['customer', 'support_agent', 'product_manager'],
+                'low'
+            );
+        END IF;
+    END LOOP;
+    
+    -- Add general support content not tied to specific products
+    INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity) VALUES
+    (NULL, 'POLICY UPDATE: Extended holiday returns through January 31st for November-December purchases.', 
+     'product_faq', ARRAY['customer', 'support_agent', 'product_manager'], 'low'),
+    (NULL, 'SYSTEM ALERT: AWS us-west-2 latency affecting smart home device connections. ETR: 2 hours.', 
+     'internal_note', ARRAY['support_agent', 'product_manager'], 'high'),
+    (NULL, 'TRAINING: New troubleshooting workflow for connectivity issues. Complete by EOW.', 
+     'internal_note', ARRAY['support_agent', 'product_manager'], 'medium'),
+    (NULL, 'COMPETITIVE INTEL: Competitors dropping prices 20-30% on security cameras for Black Friday.', 
+     'analytics', ARRAY['product_manager'], 'medium'),
+    (NULL, 'Q: How do I reset my device to factory settings? A: Hold reset button for 10 seconds until LED flashes.', 
+     'product_faq', ARRAY['customer', 'support_agent', 'product_manager'], 'low');
+    
+    RAISE NOTICE 'Knowledge base populated with % products', idx;
+    RAISE NOTICE 'Total entries created: %', (SELECT COUNT(*) FROM knowledge_base);
+END $;
 
--- Product 2: B09B8V1LZ3 (Fire TV Stick 4K Max)
-('B09B8V1LZ3', 'Fire TV Stick 4K Max streaming device with Alexa Voice Remote', 'description', ARRAY['customer', 'agent', 'pm'], NULL),
-('B09B8V1LZ3', 'How to reset: Hold Back and Right for 10 seconds on remote', 'troubleshooting', ARRAY['customer', 'agent', 'pm'], NULL),
-('B09B8V1LZ3', 'Return rate: 3.2% - primarily due to HDMI compatibility issues with older TVs', 'metrics', ARRAY['pm'], NULL),
+-- Verification
+SELECT 'Lab 2 setup completed. Summary:' as status;
 
--- Product 3: B0B1VQ1ZQY (Kindle Scribe)
-('B0B1VQ1ZQY', 'Kindle Scribe (16 GB) - 10.2" 300 ppi Paperwhite display, includes Basic Pen', 'description', ARRAY['customer', 'agent', 'pm'], NULL),
-('B0B1VQ1ZQY', 'Premium Pen provides eraser and shortcut button functionality', 'features', ARRAY['customer', 'agent', 'pm'], NULL),
-('B0B1VQ1ZQY', 'Development roadmap: Adding PDF annotation improvements in v2.3', 'roadmap', ARRAY['pm'], NULL),
+SELECT 
+    content_type,
+    COUNT(*) as entries,
+    COUNT(DISTINCT product_id) as products
+FROM knowledge_base
+GROUP BY content_type
+ORDER BY entries DESC;
 
--- Products 4-10: Ring products
-('B08N5VSYNY', 'Ring Video Doorbell 4 – improved 4-second color video preview', 'description', ARRAY['customer', 'agent', 'pm'], NULL),
-('B07Q9VBYV8', 'Ring Indoor Cam - Compact Plug-In HD security camera', 'description', ARRAY['customer', 'agent', 'pm'], NULL),
-('B08N5VSYNY', 'Troubleshooting: If motion detection issues, check WiFi signal strength', 'troubleshooting', ARRAY['customer', 'agent', 'pm'], NULL),
-
--- Continue with more products...
--- Add systematic entries for known high-volume products
-('B0BDJ26L7G', 'Blink Mini 2 - Plug-in smart security camera', 'description', ARRAY['customer', 'agent', 'pm'], NULL),
-('B0BDJ26L7G', 'Setup: Use Blink app, create account, scan QR code on camera', 'setup_guide', ARRAY['customer', 'agent', 'pm'], NULL),
-
-('B09B9HSCL2', 'eero 6+ mesh Wi-Fi system - covers up to 4,500 sq. ft.', 'description', ARRAY['customer', 'agent', 'pm'], NULL),
-('B09B9HSCL2', 'Known limitation: WPA3 not supported on legacy devices', 'known_issues', ARRAY['agent', 'pm'], 'low'),
-
-('B08MQZXN1X', 'Amazon Smart Thermostat – ENERGY STAR certified, Alexa enabled', 'description', ARRAY['customer', 'agent', 'pm'], NULL),
-('B08MQZXN1X', 'Requires C-wire for installation - check compatibility before purchase', 'requirements', ARRAY['customer', 'agent', 'pm'], NULL),
-
--- Lab test products with varied access patterns
-('B07FZ8S74R', 'Test Product - Echo Show 8', 'description', ARRAY['customer', 'agent', 'pm'], NULL),
-('B07FZ8S74R', 'Internal testing notes: Screen burn-in after 6 months continuous use', 'testing_notes', ARRAY['pm'], 'high'),
-('B07FZ8S74R', 'Customer complaint trend: Audio sync issues with certain apps', 'support_insights', ARRAY['agent', 'pm'], 'medium');
-
-SELECT 'Lab 2 setup completed successfully' as status;
+SELECT 'Lab 2 setup completed successfully with 50 products!' as status;
 LAB2_SETUP
 
 if [ $? -eq 0 ]; then
