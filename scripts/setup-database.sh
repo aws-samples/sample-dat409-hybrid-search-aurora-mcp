@@ -251,16 +251,18 @@ pandarallel.initialize(progress_bar=True, nb_workers=10, verbose=0)
 print("🔄 Processing product data...")
 
 # Clean and prepare data
-df['product_description'] = df['title'].fillna('') + ' ' + df['description'].fillna('')
-df['product_description'] = df['product_description'].str[:2000]
-df['productId'] = df['parent_asin'].fillna(df.index.astype(str))
+df['product_description'] = df['product_description'].fillna('').str[:2000]
+if 'productId' in df.columns:
+    df['productId'] = df['productId'].fillna(df.index.astype(str))
+else:
+    df['productId'] = ['PROD' + str(i).zfill(6) for i in range(len(df))]
 df['stars'] = pd.to_numeric(df['average_rating'], errors='coerce').fillna(3.0)
 df['price'] = pd.to_numeric(df['price'].astype(str).str.replace('[\$,]', '', regex=True), errors='coerce').fillna(0.0)
 df['category_id'] = pd.Categorical(df['main_category']).codes
 
 # Add metadata
 df['metadata'] = df.apply(lambda row: json.dumps({
-    'reviews': int(row.get('rating_number', 0)) if pd.notna(row.get('rating_number')) else 0,
+    'reviews': int(row.get('reviews', 0)) if pd.notna(row.get('reviews')) else 0,
     'category': row.get('main_category', 'Unknown')
 }), axis=1)
 
