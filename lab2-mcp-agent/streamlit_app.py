@@ -434,8 +434,10 @@ def get_mcp_client():
             env={
                 "AWS_REGION": MCP_CONFIG['region'],
                 "LOGURU_LEVEL": "SUCCESS",
+                "LOGURU_FORMAT": "<level>{message}</level>",
                 "POSTGRES_DEFAULT_SCHEMA": "bedrock_integration",
-                "PYTHONUNBUFFERED": "1"
+                "PYTHONUNBUFFERED": "1",
+                "COLUMNS": "200"
             }
         )
     ))
@@ -1019,6 +1021,9 @@ if 'search_history' not in st.session_state:
 if 'performance_metrics' not in st.session_state:
     st.session_state.performance_metrics = []
 
+if 'mcp_chat_history' not in st.session_state:
+    st.session_state.mcp_chat_history = []
+
 # ============================================================================
 # MAIN APPLICATION
 # ============================================================================
@@ -1064,11 +1069,6 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    st.info("""
-    **ℹ️ Row-Level Security (RLS)**  
-    Database policies automatically filter results based on your selected persona. Customers see only public FAQs, Support Agents see tickets and internal notes, Product Managers see everything including analytics.
-    """)
-    
     st.markdown("---")
     
     # Hybrid search weights
@@ -1102,6 +1102,12 @@ with st.sidebar:
     st.markdown("### 🔧 Options")
     
     results_limit = st.slider("Results per method", 1, 20, 5, key='results_limit')
+    
+    time_filter = st.selectbox(
+        "📅 Time Window",
+        options=['All Time', 'Last 24 Hours', 'Last 7 Days', 'Last 30 Days'],
+        key='time_filter'
+    )
     
     st.markdown("---")
     
@@ -1364,31 +1370,39 @@ with tab2:
     st.markdown("### MCP Context Search with RLS Policies")
     st.caption(f"Currently viewing as: **{PERSONAS[selected_persona]['name']}** {PERSONAS[selected_persona]['icon']}")
     
-    st.info("""
-    **🔒 About RLS**: Row-Level Security policies in PostgreSQL automatically filter query results based on your persona. 
-    This ensures users only see data they're authorized to access - no application-level filtering needed.
-    """)
+    with st.expander("🔒 About Row-Level Security (RLS)", expanded=False):
+        st.markdown("""
+        **What is RLS?**  
+        Row-Level Security policies in PostgreSQL automatically filter query results based on your persona. 
+        Users only see data they're authorized to access - no application-level filtering needed.
+        
+        **Testing RLS:**
+        - ✅ **With Strands Agent** (checked): Uses admin access via MCP Data API - bypasses RLS
+        - 🔒 **Without Strands Agent** (unchecked): Uses persona-specific database users - enforces RLS
+        
+        **Try it:** Uncheck "Use Strands Agent" below and test the quick queries to see RLS in action!
+        """)
     
     # Quick action buttons for MCP - persona-specific
     st.markdown("**⚡ Quick Try:**")
     mcp_quick_queries_by_persona = {
         'customer': [
-            ("light", "✅ FAQ Access"),
-            ("cable", "✅ FAQ Access"),
-            ("stylus", "✅ FAQ Access"),
-            ("ticket", "🔒 Restricted")
+            ("warranty", "✅ FAQ Access"),
+            ("return policy", "✅ FAQ Access"),
+            ("headphones", "✅ FAQ Access"),
+            ("support ticket", "🔒 Restricted")
         ],
         'support_agent': [
-            ("complaint", "✅ Ticket Access"),
-            ("flickering", "✅ Ticket Access"),
-            ("defect", "✅ Internal Access"),
+            ("connectivity", "✅ Ticket Access"),
+            ("firmware", "✅ Ticket Access"),
+            ("maintenance", "✅ Internal Access"),
             ("analytics", "🔒 Restricted")
         ],
         'product_manager': [
+            ("growth", "✅ Analytics Access"),
             ("sales", "✅ Analytics Access"),
-            ("revenue", "✅ Analytics Access"),
-            ("retention", "✅ Analytics Access"),
-            ("light", "✅ All Access")
+            ("product launch", "✅ Internal Access"),
+            ("warranty", "✅ All Access")
         ]
     }
     mcp_quick_queries = mcp_quick_queries_by_persona.get(selected_persona, [])
@@ -1400,39 +1414,16 @@ with tab2:
                 st.session_state.mcp_quick_search = q
                 st.rerun()
     
-    # Explanation for RLS demo
-    rls_explanations = {
-        'customer': "💡 RLS Test: Uncheck 'Strands Agent', try 'light'/'cable'/'stylus' (✅ see FAQs) vs 'ticket' (🔒 no results)",
-        'support_agent': "💡 RLS Test: Uncheck 'Strands Agent', try 'complaint'/'defect' (✅ see tickets/notes) vs 'analytics' (🔒 no results)",
-        'product_manager': "💡 Product Managers see everything: Try any query to see FAQs, tickets, internal notes, and analytics."
-    }
-    st.caption(rls_explanations.get(selected_persona, ""))
+
     
-    st.info("""
-    **🔒 RLS Testing**: Uncheck "Use Strands Agent" to test RLS. 
-    MCP agent = admin access (bypasses RLS) | Direct search = persona-specific users (enforces RLS)
-    """)
-    
-    # MCP Method selection and Time filter
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        use_strands_agent = st.checkbox(
-            "🤖 Use Strands Agent with MCP Tools", 
-            value=False,
-            help="**Checked**: AI agent uses MCP tools to intelligently query the database and synthesize natural language responses. ⚠️ Note: MCP uses Aurora Data API with admin credentials, so RLS policies are NOT enforced.\n\n**Unchecked**: Direct hybrid search on knowledge base with RLS policies applied. ✅ RLS policies ARE enforced based on selected persona."
-        )
-        if use_strands_agent:
-            st.caption("⚠️ MCP Agent uses admin access - RLS policies not enforced. Uncheck to test RLS.")
-    
-    with col2:
-        time_filter = st.selectbox(
-            "📅 Time Window",
-            options=['All Time', 'Last 24 Hours', 'Last 7 Days', 'Last 30 Days'],
-            key='time_filter'
-        )
-    
-    with col3:
-        st.empty()  # Placeholder for alignment
+    # MCP Method selection
+    use_strands_agent = st.checkbox(
+        "🤖 Use Strands Agent with MCP Tools", 
+        value=False,
+        help="**Checked**: AI agent uses MCP tools to intelligently query the database and synthesize natural language responses. ⚠️ Note: MCP uses Aurora Data API with admin credentials, so RLS policies are NOT enforced.\n\n**Unchecked**: Direct hybrid search on knowledge base with RLS policies applied. ✅ RLS policies ARE enforced based on selected persona."
+    )
+    if use_strands_agent:
+        st.caption("⚠️ MCP Agent uses admin access - RLS policies not enforced. Uncheck to test RLS.")
     
     time_window_map = {
         'All Time': None,
@@ -1457,7 +1448,8 @@ with tab2:
     if mcp_search_button and not mcp_query:
         st.warning("⚠️ Please enter a search query")
     
-    if mcp_search_button and mcp_query:
+    # Show chat interface if there's history or new search
+    if (mcp_search_button and mcp_query) or (use_strands_agent and st.session_state.mcp_chat_history):
         if use_strands_agent:
             # Use Strands Agent with MCP tools
             st.markdown("#### 🤖 Strands Agent Response")
@@ -1512,10 +1504,11 @@ with tab2:
                             for tool in agent_result['tools_used']:
                                 st.code(tool, language="text")
                         
-                        # Display agent response
-                        st.markdown("---")
-                        st.markdown("#### 💬 Agent Response")
-                        st.markdown(agent_result['response'])
+                        # Add initial query and response to history if new search
+                        if mcp_search_button and mcp_query:
+                            if not st.session_state.mcp_chat_history or st.session_state.mcp_chat_history[-1]['content'] != agent_result['response']:
+                                st.session_state.mcp_chat_history.append({"role": "user", "content": mcp_query})
+                                st.session_state.mcp_chat_history.append({"role": "assistant", "content": agent_result['response']})
                         
                         # Show explanation
                         st.info("""
@@ -1530,6 +1523,40 @@ with tab2:
                 except Exception as e:
                     st.error(f"Agent error: {str(e)}")
                     logger.error(f"Strands Agent error: {e}")
+            
+            # Always show chat interface when using Strands agent and there's history
+            if st.session_state.mcp_chat_history:
+                st.markdown("---")
+                
+                # Clear chat button at the top
+                col1, col2 = st.columns([5, 1])
+                with col1:
+                    st.markdown("#### 💬 Agent Chat")
+                with col2:
+                    if st.button("🗑️ Clear Chat", key="clear_chat"):
+                        st.session_state.mcp_chat_history = []
+                        st.rerun()
+                
+                # Display chat history in container
+                chat_container = st.container(height=400)
+                with chat_container:
+                    for msg in st.session_state.mcp_chat_history:
+                        with st.chat_message(msg["role"]):
+                            st.markdown(msg["content"])
+                
+                # Follow-up question input
+                if follow_up := st.chat_input("Ask a follow-up question..."):
+                    # Get agent response
+                    with st.spinner("Thinking..."):
+                        follow_up_result = strands_agent_search(follow_up, selected_persona, use_mcp=True)
+                        if not follow_up_result['error']:
+                            st.session_state.mcp_chat_history.append({"role": "user", "content": follow_up})
+                            st.session_state.mcp_chat_history.append({"role": "assistant", "content": follow_up_result['response']})
+                        else:
+                            error_msg = f"Error: {follow_up_result['error']}"
+                            st.session_state.mcp_chat_history.append({"role": "user", "content": follow_up})
+                            st.session_state.mcp_chat_history.append({"role": "assistant", "content": error_msg})
+                    st.rerun()
         else:
             # Use direct MCP context search (original approach)
             with st.spinner(f"Searching as {selected_persona}..."):
