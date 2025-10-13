@@ -1,2 +1,48 @@
+# Environment variables and secrets
 .env
-*.envnotebooks/.env
+*.env
+lab1-hybrid-search/.env
+lab2-mcp-agent/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+lab1-hybrid-search/venv/
+lab2-mcp-agent/venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# AWS credentials
+.aws/
+credentials
+config
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Backup files
+*.backup
+*.bak
