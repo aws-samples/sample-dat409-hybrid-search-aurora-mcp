@@ -511,7 +511,7 @@ CREATE POLICY customer_policy ON knowledge_base
 
 CREATE POLICY agent_policy ON knowledge_base
     FOR SELECT TO agent_user  
-    USING ('customer' = ANY(persona_access) OR 'agent' = ANY(persona_access));
+    USING ('support_agent' = ANY(persona_access));
 
 CREATE POLICY pm_policy ON knowledge_base
     FOR SELECT TO pm_user
