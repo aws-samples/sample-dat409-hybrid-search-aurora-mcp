@@ -27,10 +27,24 @@
       "Resource": "*"
     },
     {
-      "Sid": "AIServices",
+      "Sid": "BedrockModelAccess",
       "Effect": "Allow",
       "Action": [
-        "bedrock:*"
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+      "Resource": [
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4*",
+        "arn:aws:bedrock:*::foundation-model/cohere.embed-english-v3",
+        "arn:aws:bedrock:*::foundation-model/cohere.rerank-v3-5:0"
+      ]
+    },
+    {
+      "Sid": "BedrockListModels",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:ListFoundationModels",
+        "bedrock:GetFoundationModel"
       ],
       "Resource": "*"
     },
@@ -40,7 +54,16 @@
       "Action": [
         "aws-marketplace:Subscribe"
       ],
-      "Resource": "*"
+      "Resource": "*",
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws-marketplace:ProductId": [
+            "prod-4pmewlybdftbs",
+            "b7568428-a1ab-46d8-bab3-37def50f6f6a",
+            "cohere.rerank-v3-5:0"
+          ]
+        }
+      }
     },
     {
       "Sid": "AWSMarketplaceGeneralAccess",
