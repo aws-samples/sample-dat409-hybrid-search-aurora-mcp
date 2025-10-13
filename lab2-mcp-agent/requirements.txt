@@ -1,0 +1,43 @@
+# DAT409 Enhanced Streamlit Application Requirements
+# Python 3.9+ required
+
+# Core Framework
+streamlit>=1.22.0
+
+# Database & Vector Search
+psycopg[binary]>=3.1.13
+pgvector>=0.2.4
+
+# AWS Services
+boto3>=1.28.0
+botocore>=1.34.5
+
+# Data Processing
+pandas>=2.1.4
+numpy>=1.26.2
+pandarallel>=1.6.5
+
+# Visualization
+plotly>=5.18.0
+
+# Configuration
+python-dotenv>=1.0.0
+
+# MCP and Strands Integration
+mcp>=1.0.0
+mcp-server>=0.1.0
+strands-agents>=0.1.0
+strands-agents-tools>=0.1.0
+strands-agents-builder>=0.1.0
+
+# Utilities
+pillow>=9.5.0
+requests>=2.31.0
+
+# Optional: Performance Monitoring
+tqdm>=4.66.1
+
+# Development Dependencies (optional)
+# black==23.12.1  # Code formatting
+# flake8==6.1.0  # Linting
+# pytest==7.4.3  # Testing
