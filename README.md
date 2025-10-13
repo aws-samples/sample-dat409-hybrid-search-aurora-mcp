@@ -132,4 +132,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md#security-issue-notifications) for security
 
 ---
 
-Built with ❤️ by AWS Database Specialists
+© 2025 Shayon Sanyal, Principal Solutions Architect, AWS
