@@ -5,7 +5,6 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17.5-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Bedrock](https://img.shields.io/badge/Amazon_Bedrock-Cohere-FF9900?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/bedrock/)
 [![License](https://img.shields.io/badge/License-MIT--0-green?style=for-the-badge)](LICENSE)
-[![Workshop](https://img.shields.io/badge/Workshop-60_min-blue?style=for-the-badge&logo=aws&logoColor=white)](https://workshops.aws/)
 
 > **⚠️ Important Notice**: The examples in this repository are for demonstration and educational purposes only. They demonstrate concepts and techniques but are not intended for direct use in production. Always apply proper security and testing procedures before using in production environments.
 
