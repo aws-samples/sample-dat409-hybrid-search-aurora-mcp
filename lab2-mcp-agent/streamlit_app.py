@@ -33,10 +33,11 @@ from strands.tools.mcp import MCPClient
 
 # Load environment
 load_dotenv()
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("dat409_app")
-# Keep MCP server logs at INFO to show run_query and tool usage
-logging.getLogger("awslabs.postgres_mcp_server.server").setLevel(logging.INFO)
+logger.setLevel(logging.INFO)
+# Suppress INFO logs from MCP server, only show WARNING and above
+logging.getLogger("awslabs.postgres_mcp_server.server").setLevel(logging.WARNING)
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -432,8 +433,9 @@ def get_mcp_client():
             ],
             env={
                 "AWS_REGION": MCP_CONFIG['region'],
-                "FASTMCP_LOG_LEVEL": "ERROR",
-                "POSTGRES_DEFAULT_SCHEMA": "bedrock_integration"
+                "LOGURU_LEVEL": "SUCCESS",
+                "POSTGRES_DEFAULT_SCHEMA": "bedrock_integration",
+                "PYTHONUNBUFFERED": "1"
             }
         )
     ))
