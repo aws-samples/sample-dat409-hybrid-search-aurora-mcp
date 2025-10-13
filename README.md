@@ -66,7 +66,7 @@ Query your database using natural language with Model Context Protocol (MCP) and
 - Row-Level Security (RLS) for persona-based data access
 - Natural language to SQL with AI agents
 - Secure multi-tenant data access patterns
-- Testing different user personas (customer, agent, product manager)
+- Testing different user personas (customer, support, product manager)
 
 **How to access:**
 ```bash
