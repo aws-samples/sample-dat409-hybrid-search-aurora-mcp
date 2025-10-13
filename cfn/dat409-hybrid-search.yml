@@ -1,0 +1,270 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DAT409 - Hybrid Search with Aurora PostgreSQL v17.5 - Main Stack'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Workshop Configuration
+        Parameters:
+          - WorkshopName
+          - ParticipantRoleArn
+      - Label:
+          default: Workshop Assets
+        Parameters:
+          - PublicAssetsBucketName
+          - PublicAssetsBucketPrefix
+          - AssetsBucketName
+          - AssetsBucketPrefix
+          - GitHubRepo
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - VpcCIDR
+          - PublicSubnetACidr
+          - PublicSubnetBCidr
+          - PrivateSubnetACidr
+          - PrivateSubnetBCidr
+      - Label:
+          default: Database Configuration
+        Parameters:
+          - DBVersion
+          - DBInstanceClass
+      - Label:
+          default: Code Editor Configuration
+        Parameters:
+          - CodeEditorInstanceType
+          - CodeEditorVolumeSize
+      - Label:
+          default: Environment Configuration
+        Parameters:
+          - IsWorkshopStudioEnv
+
+Parameters:
+  WorkshopName:
+    Type: String
+    Default: dat409-hybrid-search
+    Description: Workshop identifier
+    
+  ParticipantRoleArn:
+    Type: String
+    Description: Workshop Studio participant role ARN
+    Default: ''
+    
+  PublicAssetsBucketName:
+    Type: String
+    Description: Public S3 bucket for CloudFormation templates
+    Default: ws-assets-prod-iad-r-pdx-f3b3f9f1a7d6a3d0
+    
+  PublicAssetsBucketPrefix:
+    Type: String
+    Description: Public S3 prefix for CloudFormation templates
+    Default: ''
+    
+  AssetsBucketName:
+    Type: String
+    Description: Workshop Studio assets bucket
+    
+  AssetsBucketPrefix:
+    Type: String
+    Description: Workshop Studio assets prefix
+    
+  GitHubRepo:
+    Type: String
+    Default: https://github.com/aws-samples/sample-dat409-hybrid-search-aurora-mcp.git
+    Description: GitHub repository URL
+    
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for VPC
+    
+  PublicSubnetACidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for Public Subnet A
+    
+  PublicSubnetBCidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for Public Subnet B
+    
+  PrivateSubnetACidr:
+    Type: String
+    Default: 10.0.11.0/24
+    Description: CIDR block for Private Subnet A
+    
+  PrivateSubnetBCidr:
+    Type: String
+    Default: 10.0.12.0/24
+    Description: CIDR block for Private Subnet B
+    
+  DBVersion:
+    Type: String
+    Default: '17'
+    Description: Aurora PostgreSQL major version
+    AllowedValues:
+      - '16'
+      - '17'
+      
+  DBInstanceClass:
+    Type: String
+    Default: 'db.r8g.2xlarge'
+    Description: Database instance class
+    AllowedValues:
+      - 'db.r8g.xlarge'
+      - 'db.r8g.2xlarge'
+      - 'db.r8g.4xlarge'
+    
+  CodeEditorInstanceType:
+    Type: String
+    Default: t4g.large
+    Description: Instance type for Code Editor
+    AllowedValues:
+      - t4g.medium
+      - t4g.large
+      - t4g.xlarge
+      
+  CodeEditorVolumeSize:
+    Type: Number
+    Default: "50"
+    Description: Code Editor instance volume size in GB
+    
+  IsWorkshopStudioEnv:
+    Type: String
+    Default: 'yes'
+    AllowedValues:
+      - 'yes'
+      - 'no'
+    Description: Running in Workshop Studio?
+
+Resources:
+  # ==========================================
+  # VPC STACK - Network infrastructure
+  # ==========================================
+  VPCStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${PublicAssetsBucketName}.s3.amazonaws.com/${PublicAssetsBucketPrefix}dat409-vpc.yml'
+      Parameters:
+        TemplateName: !Ref WorkshopName
+        VpcName: !Sub '${WorkshopName}-vpc'
+        VpcCIDR: !Ref VpcCIDR
+        PublicSubnetACidr: !Ref PublicSubnetACidr
+        PublicSubnetBCidr: !Ref PublicSubnetBCidr
+        PublicSubnetCCidr: 10.0.3.0/24
+        PrivateSubnetACidr: !Ref PrivateSubnetACidr
+        PrivateSubnetBCidr: !Ref PrivateSubnetBCidr
+        PrivateSubnetCCidr: 10.0.13.0/24
+      Tags:
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+  # ==========================================
+  # RDS VERSION HELPER LAMBDA - Aurora PostgreSQL
+  # ==========================================
+  RDSVersionStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${PublicAssetsBucketName}.s3.amazonaws.com/${PublicAssetsBucketPrefix}dat409-rds-version.yml'
+      Tags:
+        - Key: Workshop
+          Value: !Ref WorkshopName
+
+  # ==========================================
+  # DATABASE STACK - Aurora PostgreSQL 17.5 with pgvector
+  # ==========================================
+  DatabaseStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: 
+      - VPCStack
+      - RDSVersionStack
+    Properties:
+      TemplateURL: !Sub 'https://${PublicAssetsBucketName}.s3.amazonaws.com/${PublicAssetsBucketPrefix}dat409-database.yml'
+      Parameters:
+        TemplateName: !Ref WorkshopName
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        VpcCIDR: !Ref VpcCIDR
+        PrivateSubnets: !GetAtt VPCStack.Outputs.PrivateSubnets
+        DBVersion: !Ref DBVersion
+        RDSVersionLambdaFunction: !GetAtt RDSVersionStack.Outputs.RDSVersionLambdaFunction
+      Tags:
+        - Key: Workshop
+          Value: !Ref WorkshopName
+      TimeoutInMinutes: 30  # Aurora cluster creation can take time
+
+  # ==========================================
+  # CODE EDITOR STACK - Workshop IDE
+  # ==========================================
+  CodeEditorStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - VPCStack
+      - DatabaseStack
+    Properties:
+      TemplateURL: !Sub 'https://${PublicAssetsBucketName}.s3.amazonaws.com/${PublicAssetsBucketPrefix}dat409-code-editor.yml'
+      Parameters:
+        TemplateName: !Ref WorkshopName
+        CodeEditorUser: participant
+        InstanceName: !Sub '${WorkshopName}-editor'
+        InstanceVolumeSize: !Ref CodeEditorVolumeSize
+        InstanceType: !Ref CodeEditorInstanceType
+        InstanceOperatingSystem: AmazonLinux-2023
+        HomeFolder: /workshop
+        RepoUrl: !Ref GitHubRepo
+        VPCId: !GetAtt VPCStack.Outputs.VPC
+        SubnetId: !GetAtt VPCStack.Outputs.PublicSubnetA
+        VpcCIDR: !Ref VpcCIDR
+        DBSecretArn: !GetAtt DatabaseStack.Outputs.RDSSecrets
+        DBClusterEndpoint: !GetAtt DatabaseStack.Outputs.APGClusterEP
+        DBClusterArn: !GetAtt DatabaseStack.Outputs.APGClusterArn
+        DBName: workshop_db
+        PythonVersion: '3.13'
+        PostgreSQLVersion: '16'
+      Tags:
+        - Key: Workshop
+          Value: !Ref WorkshopName
+      TimeoutInMinutes: 30
+
+# ==========================================
+# OUTPUTS - Workshop Access Information
+# ==========================================
+Outputs:
+  # Primary Access Point
+  WorkshopURL:
+    Description: 'VS Code IDE - Your workshop environment (Click to access)'
+    Value: !GetAtt CodeEditorStack.Outputs.URL
+    
+  Username:
+    Description: 'VS Code Username'
+    Value: !GetAtt CodeEditorStack.Outputs.Username
+    
+  Password:
+    Description: 'VS Code Password (save this!)'
+    Value: !GetAtt CodeEditorStack.Outputs.Password
+    
+  # Database Information (for reference)
+  DatabaseEndpoint:
+    Description: 'Aurora PostgreSQL Endpoint (auto-configured)'
+    Value: !GetAtt DatabaseStack.Outputs.APGClusterEP
+    
+  DatabaseVersion:
+    Description: 'Aurora PostgreSQL Version'
+    Value: !GetAtt DatabaseStack.Outputs.APGVersion
+    
+  DatabaseClusterArn:
+    Description: 'Aurora Cluster ARN (for Data API)'
+    Value: !GetAtt DatabaseStack.Outputs.APGClusterArn
+    
+  DatabaseSecretArn:
+    Description: 'Database credentials in Secrets Manager'
+    Value: !GetAtt DatabaseStack.Outputs.RDSSecrets
+    
+  # Workshop Information
+  Region:
+    Description: 'AWS Region'
+    Value: !Ref AWS::Region
+    
+  WorkshopName:
+    Description: 'Workshop Identifier'
+    Value: !Ref WorkshopName

@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DAT409 - RDS Version Helper Lambda for CloudFormation'
+
+Resources:
+  # Lambda Role
+  RDSVersionLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RDSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds:DescribeDBEngineVersions
+                Resource: '*'
+
+  # Lambda Function - Auto-generated name to avoid length issues
+  RDSVersionLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: 'DAT409 - Helper function to get latest RDS engine version'
+      Handler: index.lambda_handler
+      Runtime: python3.13
+      Timeout: 60
+      Role: !GetAtt RDSVersionLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          
+          def lambda_handler(event, context):
+              """
+              Get the latest RDS engine version for a given engine and major version.
+              Defaults to Aurora PostgreSQL 17.5 with 16.9 as fallback.
+              """
+              try:
+                  # Handle CloudFormation Delete
+                  if event['RequestType'] == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+                  
+                  # Get parameters
+                  properties = event['ResourceProperties']
+                  engine = properties.get('Engine', 'aurora-postgresql')
+                  major_version = properties.get('EngineMajorVersion', '17')
+                  
+                  # Initialize RDS client
+                  rds = boto3.client('rds')
+                  
+                  # Build filters
+                  filters = [
+                      {
+                          'Name': 'engine',
+                          'Values': [engine]
+                      },
+                      {
+                          'Name': 'engine-mode',
+                          'Values': ['provisioned']  # For Aurora, filter provisioned mode
+                      }
+                  ]
+                  
+                  # Query RDS for engine versions
+                  response = rds.describe_db_engine_versions(
+                      Engine=engine,
+                      Filters=filters,
+                      MaxRecords=100
+                  )
+                  
+                  # Filter by major version and find the latest
+                  versions = []
+                  for version in response['DBEngineVersions']:
+                      version_str = version['EngineVersion']
+                      
+                      # Check if this is the major version we want
+                      if version_str.startswith(str(major_version) + '.'):
+                          versions.append({
+                              'version': version_str,
+                              'version_numeric': [int(x) for x in version_str.split('.')]
+                          })
+                  
+                  if not versions:
+                      # If no specific minor version found, use hardcoded defaults
+                      print(f"No versions found for {engine} {major_version}, using defaults")
+                      
+                      # Aurora PostgreSQL version defaults with 17.5 and 16.9 fallback
+                      if engine == 'aurora-postgresql':
+                          if major_version == '17':
+                              # Try 17.5 first
+                              engine_version = '17.5'
+                              print(f"Using Aurora PostgreSQL 17.5")
+                          elif major_version == '16':
+                              engine_version = '16.9'  # Fallback to 16.9
+                              print(f"Using Aurora PostgreSQL 16.9")
+                          elif major_version == '15':
+                              engine_version = '15.8'
+                          else:
+                              # Generic fallback
+                              engine_version = f"{major_version}.0"
+                      else:
+                          engine_version = f"{major_version}.0"
+                  else:
+                      # Sort versions to get the latest
+                      versions.sort(key=lambda x: x['version_numeric'], reverse=True)
+                      
+                      # For Aurora PostgreSQL 17, prefer 17.5 if available
+                      if engine == 'aurora-postgresql' and major_version == '17':
+                          # Look for 17.5 specifically
+                          for v in versions:
+                              if v['version'] == '17.5':
+                                  engine_version = '17.5'
+                                  break
+                          else:
+                              # Use the latest 17.x found
+                              engine_version = versions[0]['version']
+                      else:
+                          engine_version = versions[0]['version']
+                  
+                  print(f"Selected engine version: {engine} {engine_version}")
+                  
+                  # Return the version
+                  response_data = {
+                      'EngineVersion': engine_version,
+                      'Engine': engine,
+                      'MajorVersion': major_version
+                  }
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+                  
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  # On error, try fallback versions
+                  if properties.get('EngineMajorVersion', '17') == '17':
+                      default_version = '17.5'
+                  elif properties.get('EngineMajorVersion', '17') == '16':
+                      default_version = '16.9'
+                  else:
+                      default_version = f"{properties.get('EngineMajorVersion', '17')}.0"
+                  
+                  response_data = {
+                      'EngineVersion': default_version,
+                      'Engine': properties.get('Engine', 'aurora-postgresql'),
+                      'MajorVersion': properties.get('EngineMajorVersion', '17')
+                  }
+                  print(f"Using fallback version: {default_version}")
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+
+Outputs:
+  RDSVersionLambdaFunction:
+    Description: Lambda function ARN for RDS version helper
+    Value: !GetAtt RDSVersionLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-lambda-arn'
