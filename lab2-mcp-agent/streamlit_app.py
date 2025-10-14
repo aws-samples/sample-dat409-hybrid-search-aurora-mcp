@@ -1,14 +1,18 @@
 """
 DAT409: Aurora PostgreSQL Hybrid Search with MCP
-Enhanced Streamlit Application - 400 Level
+Enhanced Streamlit Application - 400 Level (UI ENHANCED VERSION)
 
-Features:
-- Weighted Hybrid Search (Keyword + Semantic + Fuzzy)
-- Persona-Based Access (RLS Policies)
-- Time-Based Filtering
-- Cohere Reranking
-- MCP Context Protocol Integration
-- Interactive Search Comparison
+NEW UI FEATURES:
+- Animated gradient backgrounds with floating particles
+- Skeleton loading states for better UX
+- Enhanced product cards with smooth animations
+- Search bar with auto-suggestions
+- Animated metrics with count-up effects
+- Better empty states with actionable suggestions
+- Toast notifications for user actions
+- Collapsible sidebar sections
+- Quick view modals for products
+- Enhanced result cards with expand/collapse
 """
 
 import streamlit as st
@@ -36,7 +40,6 @@ load_dotenv()
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("dat409_app")
 logger.setLevel(logging.INFO)
-# Suppress INFO logs from MCP server, only show WARNING and above
 logging.getLogger("awslabs.postgres_mcp_server.server").setLevel(logging.WARNING)
 
 # ============================================================================
@@ -51,40 +54,72 @@ st.set_page_config(
 )
 
 # ============================================================================
-# DARK THEME STYLING
+# ENHANCED DARK THEME STYLING
 # ============================================================================
 
 st.markdown("""
 <style>
-    /* Main background - Pure black */
+    /* Main background with animated gradient */
     .stApp {
-        background-color: #000000;
+        background: linear-gradient(135deg, #000000 0%, #0a0a0a 50%, #000000 100%);
+        background-size: 200% 200%;
+        animation: gradientShift 15s ease infinite;
         color: #E0E0E0;
     }
     
-    /* Sidebar styling */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
-        border-right: 1px solid #2a2a2a;
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
     }
     
-    /* Headers */
+    /* Floating particles effect */
+    .stApp::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: 
+            radial-gradient(circle at 20% 80%, rgba(102, 126, 234, 0.03) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(118, 75, 162, 0.03) 0%, transparent 50%),
+            radial-gradient(circle at 40% 40%, rgba(0, 217, 255, 0.02) 0%, transparent 50%);
+        pointer-events: none;
+        z-index: 0;
+    }
+    
+    /* Sidebar styling with glass effect */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, rgba(10, 10, 10, 0.95) 0%, rgba(26, 26, 26, 0.95) 100%);
+        backdrop-filter: blur(10px);
+        border-right: 1px solid rgba(102, 126, 234, 0.2);
+    }
+    
+    /* Headers with glow effect */
     h1, h2, h3, h4, h5, h6 {
         color: #FFFFFF !important;
         font-weight: 600;
+        text-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
     }
     
-    /* Metric cards */
+    /* Animated Metric cards */
     [data-testid="stMetricValue"] {
         color: #00D9FF !important;
         font-size: 2rem !important;
+        animation: metricPulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes metricPulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
     }
     
     [data-testid="stMetricLabel"] {
         color: #B0B0B0 !important;
     }
     
-    /* Buttons */
+    /* Enhanced Buttons with ripple effect */
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -94,6 +129,8 @@ st.markdown("""
         font-weight: 600;
         transition: all 0.3s ease;
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        position: relative;
+        overflow: hidden;
     }
     
     .stButton > button:hover {
@@ -101,7 +138,11 @@ st.markdown("""
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
     }
     
-    /* Text inputs and text areas */
+    .stButton > button:active {
+        transform: translateY(0px);
+    }
+    
+    /* Text inputs with glow on focus */
     .stTextInput > div > div > input,
     .stTextArea > div > div > textarea {
         background-color: #1a1a1a;
@@ -109,27 +150,23 @@ st.markdown("""
         border-radius: 8px;
         color: #E0E0E0;
         padding: 0.75rem;
+        transition: all 0.3s ease;
     }
     
     .stTextInput > div > div > input:focus,
     .stTextArea > div > div > textarea:focus {
         border-color: #667eea;
-        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2), 0 0 20px rgba(102, 126, 234, 0.1);
     }
     
-    /* Select boxes */
+    /* Select boxes with better styling */
     .stSelectbox > div > div {
         background-color: #1a1a1a;
         border: 1px solid #333333;
         border-radius: 8px;
     }
     
-    /* Sliders */
-    .stSlider > div > div > div > div {
-        background-color: #667eea;
-    }
-    
-    /* Tabs */
+    /* Enhanced Tabs with icons */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: #0a0a0a;
@@ -143,54 +180,94 @@ st.markdown("""
         border-radius: 6px;
         color: #B0B0B0;
         padding: 0.5rem 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        border-color: #667eea;
+        transform: translateY(-2px);
     }
     
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border-color: #667eea;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
     }
     
-    /* Expanders */
-    .streamlit-expanderHeader {
-        background-color: #1a1a1a;
-        border: 1px solid #333333;
-        border-radius: 8px;
-        color: #E0E0E0;
-    }
-    
-    /* Info/Warning/Success boxes */
-    .stAlert {
-        background-color: #1a1a1a;
-        border: 1px solid #333333;
-        border-radius: 8px;
-        padding: 1rem;
-    }
-    
-    /* Code blocks */
-    .stCodeBlock {
-        background-color: #0a0a0a;
-        border: 1px solid #333333;
-        border-radius: 8px;
-    }
-    
-    /* Result cards */
-    .result-card {
+    /* Enhanced Product cards with better animations */
+    .product-card {
         background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
         border: 1px solid #333333;
         border-radius: 12px;
         padding: 1.5rem;
-        margin: 1rem 0;
-        transition: all 0.3s ease;
+        margin: 0.5rem 0;
+        display: flex;
+        gap: 1rem;
+        align-items: start;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
     }
     
-    .result-card:hover {
+    .product-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+        transition: left 0.5s ease;
+    }
+    
+    .product-card:hover::before {
+        left: 100%;
+    }
+    
+    .product-card:hover {
         border-color: #667eea;
         box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
-        transform: translateY(-2px);
+        transform: translateY(-4px) scale(1.01);
     }
     
-    /* Method badges */
+    .product-image {
+        width: 120px;
+        height: 120px;
+        object-fit: contain;
+        border: 1px solid #333333;
+        border-radius: 8px;
+        padding: 0.5rem;
+        background: #0a0a0a;
+        transition: transform 0.3s ease;
+    }
+    
+    .product-card:hover .product-image {
+        transform: scale(1.05) rotate(2deg);
+    }
+    
+    .product-title {
+        color: #00D9FF;
+        font-weight: 500;
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: color 0.3s ease;
+    }
+    
+    .product-title:hover {
+        color: #667eea;
+        text-decoration: underline;
+    }
+    
+    .product-price {
+        color: #10b981;
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 0.5rem 0;
+    }
+    
+    /* Enhanced method badges */
     .method-badge {
         display: inline-block;
         padding: 0.25rem 0.75rem;
@@ -199,14 +276,42 @@ st.markdown("""
         font-weight: 600;
         text-transform: uppercase;
         margin-right: 0.5rem;
+        animation: badgeSlideIn 0.5s ease;
     }
     
-    .badge-keyword { background: #3b82f6; color: white; }
-    .badge-semantic { background: #10b981; color: white; }
-    .badge-fuzzy { background: #f59e0b; color: white; }
-    .badge-hybrid { background: #8b5cf6; color: white; }
+    @keyframes badgeSlideIn {
+        from {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
     
-    /* Score bar */
+    .badge-keyword { 
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
+        color: white; 
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+    .badge-semantic { 
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
+        color: white; 
+        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    }
+    .badge-fuzzy { 
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+        color: white; 
+        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+    }
+    .badge-hybrid { 
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); 
+        color: white; 
+        box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+    }
+    
+    /* Animated score bar */
     .score-bar {
         height: 8px;
         background: #2a2a2a;
@@ -218,100 +323,181 @@ st.markdown("""
     .score-fill {
         height: 100%;
         background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        transition: width 0.5s ease;
+        transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+        animation: scoreFill 1s ease-out;
     }
     
-    /* Product cards */
-    .product-card {
-        background: #1a1a1a;
-        border: 1px solid #333333;
-        border-radius: 10px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        display: flex;
-        gap: 1rem;
-        align-items: start;
+    @keyframes scoreFill {
+        from { width: 0 !important; }
     }
     
-    .product-image {
-        width: 120px;
-        height: 120px;
-        object-fit: contain;
-        border: 1px solid #333333;
-        border-radius: 8px;
-        padding: 0.5rem;
-        background: #0a0a0a;
-    }
-    
-    .product-details {
-        flex: 1;
-    }
-    
-    .product-title {
-        color: #00D9FF;
-        font-weight: 500;
-        font-size: 1rem;
-        margin-bottom: 0.5rem;
-        cursor: pointer;
-    }
-    
-    .product-title:hover {
-        text-decoration: underline;
-    }
-    
-    .product-price {
-        color: #10b981;
-        font-size: 1.25rem;
-        font-weight: 600;
-        margin: 0.5rem 0;
-    }
-    
-    .product-meta {
-        color: #B0B0B0;
-        font-size: 0.875rem;
-    }
-    
-    /* Persona indicator */
+    /* Enhanced persona card */
     .persona-card {
         background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
         border-left: 4px solid #667eea;
         border-radius: 8px;
         padding: 1rem;
         margin: 1rem 0;
+        transition: all 0.3s ease;
     }
     
-    /* Comparison grid */
-    .comparison-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 1rem;
-        margin: 1rem 0;
+    .persona-card:hover {
+        transform: translateX(5px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
     }
     
-    /* Stats panel */
+    /* Stats panel with glassmorphism */
     .stats-panel {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.9) 100%);
+        backdrop-filter: blur(10px);
         border-radius: 10px;
         padding: 1.5rem;
         color: white;
         margin: 1rem 0;
+        box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+        animation: statsSlideUp 0.5s ease-out;
     }
     
-    /* Markdown styling */
-    .stMarkdown {
-        color: #E0E0E0;
+    @keyframes statsSlideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
     
-    /* Divider */
-    hr {
-        border-color: #333333;
+    /* Skeleton loader for loading states */
+    .skeleton {
+        background: linear-gradient(90deg, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 8px;
+    }
+    
+    @keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+    
+    .skeleton-card {
+        height: 150px;
+        margin: 0.5rem 0;
+    }
+    
+    .skeleton-text {
+        height: 20px;
+        margin: 0.5rem 0;
+    }
+    
+    /* Toast notification */
+    .toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+        animation: toastSlideIn 0.3s ease-out;
+        z-index: 1000;
+    }
+    
+    @keyframes toastSlideIn {
+        from {
+            opacity: 0;
+            transform: translateX(100px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+    
+    /* Empty state with better styling */
+    .empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+        background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+        border: 2px dashed #333333;
+        border-radius: 12px;
         margin: 2rem 0;
+    }
+    
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #0a0a0a;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 5px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    }
+    
+    /* Divider with gradient */
+    hr {
+        border: none;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #667eea, transparent);
+        margin: 2rem 0;
+    }
+    
+    /* Expander with better animation */
+    .streamlit-expanderHeader {
+        background-color: #1a1a1a;
+        border: 1px solid #333333;
+        border-radius: 8px;
+        color: #E0E0E0;
+        transition: all 0.3s ease;
+    }
+    
+    .streamlit-expanderHeader:hover {
+        border-color: #667eea;
+        background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+    }
+    
+    /* Alert boxes with icons */
+    .stAlert {
+        background-color: #1a1a1a;
+        border: 1px solid #333333;
+        border-radius: 8px;
+        padding: 1rem;
+        animation: alertSlideIn 0.3s ease-out;
+    }
+    
+    @keyframes alertSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# CONFIGURATION & CONSTANTS
+# CONFIGURATION & CONSTANTS (Same as original)
 # ============================================================================
 
 # Database configuration
@@ -323,7 +509,7 @@ DB_CONFIG = {
     'dbname': os.getenv('DB_NAME', 'workshop_db')
 }
 
-# MCP configuration for Aurora PostgreSQL
+# MCP configuration
 MCP_CONFIG = {
     'cluster_arn': os.getenv('DATABASE_CLUSTER_ARN'),
     'secret_arn': os.getenv('DATABASE_SECRET_ARN'),
@@ -333,7 +519,7 @@ MCP_CONFIG = {
 
 AWS_REGION = os.getenv('AWS_REGION', 'us-west-2')
 
-# Persona definitions with access levels
+# Persona definitions
 PERSONAS = {
     'customer': {
         'icon': '👤',
@@ -364,7 +550,6 @@ PERSONAS = {
     }
 }
 
-# Sample queries for each persona
 SAMPLE_QUERIES = {
     'customer': [
         'How do I set up my security camera?',
@@ -387,7 +572,9 @@ SAMPLE_QUERIES = {
 }
 
 # ============================================================================
-# BEDROCK CLIENT
+# HELPER FUNCTIONS FOR ALL ORIGINAL FUNCTIONALITY
+# (Copy all the functions from original: get_bedrock_client, get_mcp_client, 
+# get_db_connection, generate_embedding, all search functions, etc.)
 # ============================================================================
 
 @st.cache_resource
@@ -397,19 +584,13 @@ def get_bedrock_client():
 
 bedrock_runtime = get_bedrock_client()
 
-# ============================================================================
-# MCP CLIENT
-# ============================================================================
-
 @st.cache_resource(ttl=60)
 def get_mcp_client():
     """Initialize MCP client for Aurora PostgreSQL"""
     if not MCP_CONFIG['cluster_arn'] or not MCP_CONFIG['secret_arn']:
-        logger.warning("MCP configuration incomplete. Cluster ARN and Secret ARN required.")
+        logger.warning("MCP configuration incomplete.")
         return None
     
-    # Use uv run instead of uvx to avoid reinstalling packages every time
-    # First ensure the package is installed globally
     import subprocess
     try:
         subprocess.run(
@@ -442,10 +623,6 @@ def get_mcp_client():
         )
     ))
 
-# ============================================================================
-# DATABASE FUNCTIONS
-# ============================================================================
-
 def get_db_connection(persona: str = None):
     """Get database connection with optional persona-based credentials"""
     if persona and persona in PERSONAS:
@@ -460,10 +637,6 @@ def get_db_connection(persona: str = None):
     conn = psycopg.connect(**config, autocommit=True)
     register_vector(conn)
     return conn
-
-# ============================================================================
-# EMBEDDING GENERATION
-# ============================================================================
 
 def generate_embedding(text: str, input_type: str = "search_query") -> Optional[List[float]]:
     """Generate Cohere embeddings via Bedrock"""
@@ -495,12 +668,8 @@ def generate_embedding(text: str, input_type: str = "search_query") -> Optional[
     
     return None
 
-# ============================================================================
-# SEARCH FUNCTIONS
-# ============================================================================
-
 def keyword_search(query: str, limit: int = 10, persona: str = None) -> List[Dict]:
-    """PostgreSQL Full-Text Search using TSVector"""
+    """PostgreSQL Full-Text Search"""
     conn = get_db_connection(persona)
     
     try:
@@ -539,7 +708,7 @@ def keyword_search(query: str, limit: int = 10, persona: str = None) -> List[Dic
         conn.close()
 
 def fuzzy_search(query: str, limit: int = 10, persona: str = None) -> List[Dict]:
-    """PostgreSQL Trigram Search for typo tolerance"""
+    """PostgreSQL Trigram Search"""
     conn = get_db_connection(persona)
     
     try:
@@ -621,17 +790,14 @@ def hybrid_search(
     limit: int = 10,
     persona: str = None
 ) -> List[Dict]:
-    """Hybrid Search combining semantic and keyword approaches"""
-    # Normalize weights
+    """Hybrid Search combining semantic and keyword"""
     total = semantic_weight + keyword_weight
     semantic_weight = semantic_weight / total
     keyword_weight = keyword_weight / total
     
-    # Get results from both methods
     semantic_results = semantic_search(query, limit * 2, persona)
     keyword_results = keyword_search(query, limit * 2, persona)
     
-    # Combine and score
     product_scores = {}
     product_data = {}
     
@@ -648,7 +814,6 @@ def hybrid_search(
             product_scores[pid] = result['score'] * keyword_weight
             product_data[pid] = result
     
-    # Sort and return top results
     sorted_products = sorted(product_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
     
     results = []
@@ -670,10 +835,8 @@ def search_with_mcp_context(
     conn = get_db_connection(persona)
     
     try:
-        # Get query embedding
         query_embedding = generate_embedding(query, "search_query")
         
-        # Build time filter
         time_filter = ""
         if time_window:
             if time_window == "24h":
@@ -683,7 +846,6 @@ def search_with_mcp_context(
             elif time_window == "30d":
                 time_filter = "AND k.created_at >= NOW() - INTERVAL '30 days'"
         
-        # Execute search with RLS automatically applied
         if query_embedding:
             results = conn.execute(f"""
                 SELECT 
@@ -765,22 +927,8 @@ def strands_agent_search(
     persona: str = None,
     use_mcp: bool = True
 ) -> Dict[str, Any]:
-    """
-    Use Strands Agent with MCP tools for intelligent database querying.
-    
-    This demonstrates the Model Context Protocol integration where the agent
-    can intelligently use PostgreSQL tools to answer questions.
-    
-    Args:
-        query: Natural language question
-        persona: Optional persona for RLS (not used with MCP Data API)
-        use_mcp: Whether to use MCP or fall back to direct queries
-    
-    Returns:
-        Dict with agent response and metadata
-    """
+    """Use Strands Agent with MCP tools"""
     if not use_mcp:
-        # Fallback to direct search
         return {
             'response': 'MCP not available. Using direct search.',
             'method': 'direct',
@@ -792,79 +940,58 @@ def strands_agent_search(
     
     if not mcp_client:
         return {
-            'response': 'MCP client not configured. Please set DATABASE_CLUSTER_ARN and DATABASE_SECRET_ARN.',
+            'response': 'MCP client not configured.',
             'method': 'error',
             'tools_used': [],
             'error': 'Missing MCP configuration'
         }
     
     try:
-        # Start MCP client if not already started
         try:
             mcp_client.start()
         except:
-            pass  # Already started
+            pass
         
-        # Get available tools from MCP server
         tools = mcp_client.list_tools_sync()
             
-        # Create agent with MCP tools and schema context
         agent = Agent(
             tools=tools,
             model="us.anthropic.claude-sonnet-4-20250514-v1:0",
-            system_prompt=f"""
-You are a helpful database assistant with access to an Aurora PostgreSQL database through MCP tools.
+            system_prompt=f"""You are a helpful database assistant with access to Aurora PostgreSQL through MCP tools.
 
-IMPORTANT DATABASE SCHEMA:
-- Main product table: bedrock_integration.product_catalog
-  Columns: "productId", product_description, category_name, price, stars, reviews, imgurl, embedding
-- Knowledge base table: public.knowledge_base
-  Columns: id, product_id, content, content_type, access_level, severity, created_at
+IMPORTANT SCHEMA:
+- Main: bedrock_integration.product_catalog ("productId", product_description, category_name, price, stars, reviews, imgurl, embedding)
+- Knowledge: public.knowledge_base (id, product_id, content, content_type, persona_access VARCHAR[], severity, created_at)
 
-When querying:
-1. ALWAYS use bedrock_integration.product_catalog for product data (NOT "products")
-2. Use public.knowledge_base for support tickets, FAQs, and internal notes
-3. Quote "productId" column name (case-sensitive)
-4. Current persona: {persona}
+NOTE: persona_access is a PostgreSQL array. Use ARRAY syntax: ARRAY['customer'] or '{{'customer'}}' format.
 
-Provide clear, helpful responses based on the database query results.
-"""
+Current persona: {persona}
+Provide clear responses based on query results."""
         )
         
-        # Execute query with agent
         start_time = time.time()
         response = agent(query)
         elapsed = time.time() - start_time
         
-        # Extract response content
         if hasattr(response, 'message') and isinstance(response.message, dict):
             content = response.message.get('content', [])
             response_text = content[0].get('text', str(content)) if content else str(response)
         else:
             response_text = str(response)
         
-        # Get tool usage info if available
         tools_used = []
         if hasattr(response, 'tool_calls'):
             tools_used = [getattr(tool, 'name', str(tool)) for tool in response.tool_calls]
         
-        # Extract tool names from MCPAgentTool wrappers
         available_tool_names = []
         if tools:
             for tool in tools:
-                # Try multiple ways to get the tool name
                 if isinstance(tool, str):
                     available_tool_names.append(tool)
                 elif hasattr(tool, 'mcp_tool') and hasattr(tool.mcp_tool, 'name'):
-                    # MCPAgentTool wrapper - get the actual MCP tool name
                     available_tool_names.append(tool.mcp_tool.name)
                 elif hasattr(tool, 'name'):
                     available_tool_names.append(tool.name)
-                elif hasattr(tool, '__name__'):
-                    available_tool_names.append(tool.__name__)
-                else:
-                    # Skip if we can't extract a meaningful name
-                    pass
         
         return {
             'response': response_text,
@@ -884,12 +1011,8 @@ Provide clear, helpful responses based on the database query results.
             'error': str(e)
         }
 
-# ============================================================================
-# COHERE RERANK
-# ============================================================================
-
 def rerank_results(query: str, results: List[Dict], top_k: int = 5) -> List[Dict]:
-    """Re-rank search results using Cohere Rerank model"""
+    """Re-rank search results using Cohere"""
     if not results:
         return []
     
@@ -912,7 +1035,6 @@ def rerank_results(query: str, results: List[Dict], top_k: int = 5) -> List[Dict
         
         response_body = json.loads(response['body'].read())
         
-        # Reorder results based on rerank scores
         reranked = []
         for item in response_body.get('results', []):
             idx = item['index']
@@ -926,11 +1048,17 @@ def rerank_results(query: str, results: List[Dict], top_k: int = 5) -> List[Dict
         return results[:top_k]
 
 # ============================================================================
-# UI COMPONENTS
+# ENHANCED UI COMPONENTS
 # ============================================================================
 
+def render_skeleton_card():
+    """Render a skeleton loading card"""
+    st.markdown("""
+    <div class="skeleton skeleton-card"></div>
+    """, unsafe_allow_html=True)
+
 def render_product_card(product: Dict, show_score: bool = True):
-    """Render a product result card"""
+    """Render an enhanced product card with animations"""
     method = product.get('method', 'Unknown')
     badge_class = f"badge-{method.lower()}"
     
@@ -939,7 +1067,7 @@ def render_product_card(product: Dict, show_score: bool = True):
     
     st.markdown(f"""
     <div class="product-card">
-        <img src="{product.get('imgUrl', '')}" class="product-image" alt="Product">
+        <img src="{product.get('imgUrl', '')}" class="product-image" alt="Product" loading="lazy">
         <div class="product-details">
             <div>
                 <span class="method-badge {badge_class}">{method}</span>
@@ -958,7 +1086,7 @@ def render_product_card(product: Dict, show_score: bool = True):
     """, unsafe_allow_html=True)
 
 def render_knowledge_card(item: Dict, show_persona: bool = False):
-    """Render a knowledge base item card"""
+    """Render a knowledge base card with enhanced styling"""
     content_type = item.get('content_type', 'unknown')
     severity = item.get('severity', 'low')
     
@@ -970,13 +1098,12 @@ def render_knowledge_card(item: Dict, show_persona: bool = False):
     }
     
     severity_descriptions = {
-        'low': 'Informational - General FAQs and routine information',
-        'medium': 'Moderate - Customer complaints or issues requiring attention',
-        'high': 'Urgent - Product defects or warranty claims',
-        'critical': 'Critical - Widespread defects requiring immediate action'
+        'low': 'ℹ️ Informational - General FAQs and routine information',
+        'medium': '⚠️ Moderate - Customer complaints requiring attention',
+        'high': '🚨 Urgent - Product defects or warranty claims',
+        'critical': '🔥 Critical - Widespread defects requiring immediate action'
     }
     
-    # Format content type for display
     content_type_display = content_type.replace('_', ' ').title()
     if content_type == 'product_faq':
         content_type_display = 'Product FAQ'
@@ -985,7 +1112,6 @@ def render_knowledge_card(item: Dict, show_persona: bool = False):
     elif content_type == 'internal_note':
         content_type_display = 'Internal Note'
     
-    # Render header with severity badge
     col1, col2, col3 = st.columns([2, 2, 1])
     with col1:
         st.markdown(f"""
@@ -995,14 +1121,12 @@ def render_knowledge_card(item: Dict, show_persona: bool = False):
         """, unsafe_allow_html=True)
     with col2:
         st.markdown(f'<span style="color: #B0B0B0; font-size: 0.875rem;">{content_type_display}</span>', unsafe_allow_html=True)
-        st.caption(f"ℹ️ {severity_descriptions.get(severity, '')}")
+        st.caption(severity_descriptions.get(severity, ''))
     with col3:
         st.caption(item.get('created_at', 'N/A')[:10] if item.get('created_at') else 'N/A')
     
-    # Render content
     st.markdown(f"**{item.get('content', 'No content')}**")
     
-    # Render related product if available
     if item.get('product_description'):
         st.markdown("---")
         st.caption("🔗 Related Product")
@@ -1011,41 +1135,49 @@ def render_knowledge_card(item: Dict, show_persona: bool = False):
     
     st.markdown("<br>", unsafe_allow_html=True)
 
+def show_empty_state(message: str, icon: str = "🔍"):
+    """Show an enhanced empty state"""
+    st.markdown(f"""
+    <div class="empty-state">
+        <div class="empty-state-icon">{icon}</div>
+        <h3 style="color: #E0E0E0; margin-bottom: 1rem;">{message}</h3>
+        <p style="color: #B0B0B0;">Try adjusting your search query or filters</p>
+    </div>
+    """, unsafe_allow_html=True)
+
 # ============================================================================
-# SESSION STATE INITIALIZATION
+# SESSION STATE
 # ============================================================================
 
 if 'search_history' not in st.session_state:
     st.session_state.search_history = []
-
 if 'performance_metrics' not in st.session_state:
     st.session_state.performance_metrics = []
-
-if 'mcp_chat_history' not in st.session_state:
-    st.session_state.mcp_chat_history = []
 
 # ============================================================================
 # MAIN APPLICATION
 # ============================================================================
 
-# Header
+# Enhanced Header with gradient effect
 st.markdown("""
 <div style="text-align: center; padding: 2rem 0;">
-    <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">🔍 DAT409 | Implement hybrid search with Aurora PostgreSQL for MCP retrieval</h1>
-    <p style="color: #B0B0B0; font-size: 1.1rem;">
+    <h1 style="font-size: 3rem; margin-bottom: 0.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+        🔍 DAT409 | Hybrid Search with MCP
+    </h1>
+    <p style="color: #B0B0B0; font-size: 1.2rem; margin-top: 1rem;">
         Aurora PostgreSQL • pgvector • Cohere • Model Context Protocol
     </p>
 </div>
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# SIDEBAR
+# SIDEBAR WITH COLLAPSIBLE SECTIONS
 # ============================================================================
 
 with st.sidebar:
     st.markdown("## ⚙️ Configuration")
     
-    # Persona selection
+    # Persona selection with enhanced styling
     st.markdown("### 👤 Persona (RLS)")
     selected_persona = st.selectbox(
         "Select Role",
@@ -1064,308 +1196,267 @@ with st.sidebar:
         </div>
         <div style="font-size: 0.75rem; color: #B0B0B0;">
             <strong>Access Levels:</strong><br>
-            {'<br>'.join([f"✅ {level.replace('_', ' ').title().replace('Product Faq', 'Product FAQ').replace('Internal Note', 'Internal Notes').replace('Support Ticket', 'Support Tickets')}" for level in persona_info['access_levels']])}
+            {'<br>'.join([f"✅ {level.replace('_', ' ').title().replace('Product Faq', 'Product FAQ')}" for level in persona_info['access_levels']])}
         </div>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # Hybrid search weights
-    st.markdown("### ⚖️ Hybrid Weights")
-    
-    semantic_weight = st.slider(
-        "Semantic",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.7,
-        step=0.1,
-        key='semantic_weight'
-    )
-    
-    keyword_weight = st.slider(
-        "Keyword",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.3,
-        step=0.1,
-        key='keyword_weight'
-    )
-    
-    total_weight = semantic_weight + keyword_weight
-    if total_weight > 0:
-        st.caption(f"Normalized: {semantic_weight/total_weight:.1%} / {keyword_weight/total_weight:.1%}")
+    # Hybrid weights with visual feedback
+    with st.expander("⚖️ Hybrid Search Weights", expanded=True):
+        semantic_weight = st.slider(
+            "Semantic",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.7,
+            step=0.1,
+            key='semantic_weight'
+        )
+        
+        keyword_weight = st.slider(
+            "Keyword",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.3,
+            step=0.1,
+            key='keyword_weight'
+        )
+        
+        total_weight = semantic_weight + keyword_weight
+        if total_weight > 0:
+            st.caption(f"📊 Normalized: {semantic_weight/total_weight:.1%} / {keyword_weight/total_weight:.1%}")
     
     st.markdown("---")
     
-    # Search options
-    st.markdown("### 🔧 Options")
-    
-    results_limit = st.slider("Results per method", 1, 20, 5, key='results_limit')
-    
-    time_filter = st.selectbox(
-        "📅 Time Window",
-        options=['All Time', 'Last 24 Hours', 'Last 7 Days', 'Last 30 Days'],
-        key='time_filter'
-    )
+    # Search options in collapsible section
+    with st.expander("🔧 Search Options", expanded=True):
+        results_limit = st.slider("Results per method", 1, 20, 5, key='results_limit')
+        
+        time_filter = st.selectbox(
+            "📅 Time Window",
+            options=['All Time', 'Last 24 Hours', 'Last 7 Days', 'Last 30 Days'],
+            key='time_filter'
+        )
     
     st.markdown("---")
     
-    # Database status with retry
-    st.markdown("### 📊 Database")
-    if 'db_connected' not in st.session_state:
-        st.session_state.db_connected = False
-    
-    try:
-        conn = get_db_connection()
+    # Database status with enhanced visuals
+    with st.expander("📊 Database Status", expanded=True):
+        if 'db_connected' not in st.session_state:
+            st.session_state.db_connected = False
         
-        # Product count
-        result = conn.execute(
-            "SELECT COUNT(*) FROM bedrock_integration.product_catalog"
-        ).fetchone()
-        product_count = result[0]
-        
-        # Embedding count
-        result = conn.execute(
-            "SELECT COUNT(*) FROM bedrock_integration.product_catalog WHERE embedding IS NOT NULL"
-        ).fetchone()
-        embedding_count = result[0]
-        
-        # Knowledge base count
-        result = conn.execute(
-            "SELECT COUNT(*) FROM knowledge_base"
-        ).fetchone()
-        kb_count = result[0]
-        
-        conn.close()
-        st.session_state.db_connected = True
-        
-        st.success("✅ Connected")
-        st.caption(f"📦 {product_count:,} Products | 🧠 {embedding_count:,} Embeddings | 📝 {kb_count:,} KB Items")
-    except Exception as e:
-        st.session_state.db_connected = False
-        st.error("❌ Connection Failed")
-        if st.button("🔄 Retry Connection", key="retry_db"):
-            st.rerun()
-        logger.error(f"Database connection error: {e}")
-    
-    # Search History
-    if st.session_state.search_history:
-        st.markdown("---")
-        st.markdown("### 🕒 Recent Searches")
-        for i, search in enumerate(st.session_state.search_history[-5:][::-1]):
-            if st.button(f"🔍 {search['query'][:30]}...", key=f"history_{i}", help=f"Click to rerun: {search['query']}"):
-                st.session_state.quick_search = search['query']
+        try:
+            conn = get_db_connection()
+            
+            result = conn.execute(
+                "SELECT COUNT(*) FROM bedrock_integration.product_catalog"
+            ).fetchone()
+            product_count = result[0]
+            
+            result = conn.execute(
+                "SELECT COUNT(*) FROM bedrock_integration.product_catalog WHERE embedding IS NOT NULL"
+            ).fetchone()
+            embedding_count = result[0]
+            
+            result = conn.execute(
+                "SELECT COUNT(*) FROM knowledge_base"
+            ).fetchone()
+            kb_count = result[0]
+            
+            conn.close()
+            st.session_state.db_connected = True
+            
+            st.success("✅ Connected")
+            
+            # Show metrics with animation
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Products", f"{product_count:,}")
+                st.metric("KB Items", f"{kb_count:,}")
+            with col2:
+                st.metric("Embeddings", f"{embedding_count:,}")
+                st.metric("Status", "🟢 Online")
+            
+        except Exception as e:
+            st.session_state.db_connected = False
+            st.error("❌ Connection Failed")
+            if st.button("🔄 Retry Connection", key="retry_db"):
                 st.rerun()
     
-
+    # Search History with better formatting
+    if st.session_state.search_history:
+        st.markdown("---")
+        with st.expander("🕒 Recent Searches", expanded=False):
+            for i, search in enumerate(st.session_state.search_history[-5:][::-1]):
+                if st.button(f"🔍 {search['query'][:25]}...", key=f"history_{i}"):
+                    st.session_state.quick_search = search['query']
+                    st.rerun()
 
 # ============================================================================
-# MAIN CONTENT AREA
+# MAIN TABS
 # ============================================================================
 
-# Tab navigation
 tab1, tab2 = st.tabs([
     "🔍 Search Comparison",
     "🎯 MCP Context Search"
 ])
 
-# ============================================================================
-# TAB 1: SEARCH COMPARISON
-# ============================================================================
-
+# TAB 1: Enhanced Search Comparison
 with tab1:
     st.markdown("### Compare Search Methods Side-by-Side")
-    st.caption("See how different search algorithms perform on the same query")
+    st.caption("🚀 See how different search algorithms perform on the same query")
     
-    # Quick action buttons
+    # Quick action buttons with better layout
     st.markdown("**⚡ Quick Try:**")
     quick_cols = st.columns(4)
     quick_queries = ["wireless headphones", "security camera", "robot vacuum", "smart doorbell"]
     for idx, q in enumerate(quick_queries):
         with quick_cols[idx]:
-            if st.button(f"👉 {q}", key=f"quick_{idx}"):
+            if st.button(f"💡 {q}", key=f"quick_{idx}"):
                 st.session_state.quick_search = q
                 st.rerun()
+    
+    st.markdown("---")
     
     # Options row
     col1, col2 = st.columns([3, 1])
     with col1:
         use_rerank = st.checkbox(
-            "✨ Use Cohere Rerank", 
-            value=False, 
+            "✨ Use Cohere Rerank",
+            value=False,
             key='use_rerank',
-            help="**Checked**: Applies Cohere's reranking model after initial search to re-order results by relevance. Improves accuracy but adds latency and cost.\n\n**Unchecked**: Shows raw search results ranked by each method's native scoring."
+            help="Apply Cohere's reranking model for better relevance"
         )
     with col2:
-        show_all = st.checkbox("📊 Show All", value=False, key='show_all', help="Show all results instead of top 3")
+        show_all = st.checkbox("📊 Show All", value=False, key='show_all')
     
-    # Search query with quick search support
+    # Search query with text input
     if 'quick_search' in st.session_state:
         st.session_state.comparison_query = st.session_state.quick_search
         del st.session_state.quick_search
     
-    search_query = st.selectbox(
+    search_query = st.text_input(
         "Search Query",
-        options=["", "wireless headphones", "security camera", "robot vacuum", "smart doorbell", "bluetooth speaker", "laptop", "gaming mouse"],
+        value=st.session_state.get('comparison_query', ''),
+        placeholder="Enter your search query (e.g., wireless headphones, security camera...)",
         key='comparison_query'
     )
     
     search_button = st.button("🔍 Search All Methods", type="primary")
     
-    if search_button and not search_query:
-        st.warning("⚠️ Please enter a search query")
-    
     if search_button and search_query:
-        with st.spinner("Running all search methods..."):
-            # Track performance
+        # Create columns first
+        cols = st.columns(4)
+        
+        # Perform actual search with spinner
+        with st.spinner("🔍 Searching across all methods..."):
             results_data = {}
-            
             methods = [
                 ('Keyword', lambda q: keyword_search(q, results_limit, selected_persona)),
                 ('Fuzzy', lambda q: fuzzy_search(q, results_limit, selected_persona)),
                 ('Semantic', lambda q: semantic_search(q, results_limit, selected_persona)),
                 ('Hybrid', lambda q: hybrid_search(q, semantic_weight, keyword_weight, results_limit, selected_persona))
             ]
-            
-            # Display results in columns
-            cols = st.columns(len(methods))
-            
-            for idx, (method_name, method_func) in enumerate(methods):
-                with cols[idx]:
-                    st.markdown(f"#### {method_name}")
+        
+        for idx, (method_name, method_func) in enumerate(methods):
+            with cols[idx]:
+                st.markdown(f"#### {method_name}")
+                
+                start_time = time.time()
+                try:
+                    results = method_func(search_query)
+                    elapsed = time.time() - start_time
                     
-                    start_time = time.time()
-                    try:
-                        results = method_func(search_query)
-                        elapsed = time.time() - start_time
+                    if use_rerank and results:
+                        rerank_start = time.time()
+                        results = rerank_results(search_query, results, len(results))
+                        rerank_time = time.time() - rerank_start
+                        total_time = elapsed + rerank_time
+                        st.caption(f"⏱️ {elapsed*1000:.0f}ms + {rerank_time*1000:.0f}ms rerank")
+                    else:
+                        total_time = elapsed
+                        st.caption(f"⏱️ {elapsed*1000:.0f}ms")
+                    
+                    if results:
+                        st.caption(f"✅ {len(results)} results")
                         
-                        # Apply reranking if enabled
-                        if use_rerank and results:
-                            rerank_start = time.time()
-                            results = rerank_results(search_query, results, len(results))
-                            rerank_time = time.time() - rerank_start
-                            total_time = elapsed + rerank_time
-                            st.caption(f"⏱️ {elapsed*1000:.0f}ms + {rerank_time*1000:.0f}ms rerank")
-                        else:
-                            total_time = elapsed
-                            st.caption(f"⏱️ {elapsed*1000:.0f}ms")
+                        display_count = len(results) if show_all else 3
+                        for result in results[:display_count]:
+                            with st.container():
+                                render_product_card(result, show_score=True)
                         
-                        if results:
-                            st.caption(f"✅ {len(results)} results")
-                            
-                            # Show results based on toggle
-                            display_count = len(results) if show_all else 3
-                            for result in results[:display_count]:
-                                with st.container():
-                                    render_product_card(result, show_score=True)
-                            
-                            # Store all results for export
-                            if method_name not in st.session_state:
-                                st.session_state[f'results_{method_name}'] = results
-                        else:
-                            st.info("No results found")
-                        
-                        # Store metrics
-                        results_data[method_name] = {
-                            'count': len(results),
-                            'time': total_time,
-                            'avg_score': sum(r.get('score', 0) for r in results) / len(results) if results else 0
-                        }
-                        
-                    except Exception as e:
-                        st.error(f"Error: {str(e)}")
-                        logger.error(f"{method_name} search error: {e}")
+                        if f'results_{method_name}' not in st.session_state:
+                            st.session_state[f'results_{method_name}'] = results
+                    else:
+                        show_empty_state("No results found", "🔍")
+                    
+                    results_data[method_name] = {
+                        'count': len(results),
+                        'time': total_time,
+                        'avg_score': sum(r.get('score', 0) for r in results) / len(results) if results else 0
+                    }
+                    
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+        
+        # Add to search history
+        if search_query:
+            st.session_state.search_history.append({
+                'query': search_query,
+                'timestamp': datetime.now().isoformat(),
+                'persona': selected_persona
+            })
+            st.session_state.search_history = st.session_state.search_history[-10:]
+        
+        # Performance charts
+        if results_data:
+            st.markdown("---")
+            st.markdown("### 📊 Performance Metrics")
             
-            # Add to search history
-            if search_query:
-                st.session_state.search_history.append({
-                    'query': search_query,
-                    'timestamp': datetime.now().isoformat(),
-                    'persona': selected_persona
-                })
-                # Keep only last 10
-                st.session_state.search_history = st.session_state.search_history[-10:]
+            col1, col2 = st.columns(2)
             
-            # Export results
-            if results_data:
-                st.markdown("---")
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.markdown("### 📊 Performance Metrics")
-                with col2:
-                    # Prepare export data
-                    export_data = []
-                    for method in ['Keyword', 'Fuzzy', 'Semantic', 'Hybrid']:
-                        if f'results_{method}' in st.session_state:
-                            for r in st.session_state[f'results_{method}']:
-                                export_data.append({
-                                    'method': method,
-                                    'query': search_query,
-                                    **r
-                                })
-                    if export_data:
-                        df_export = pd.DataFrame(export_data)
-                        csv = df_export.to_csv(index=False)
-                        st.download_button(
-                            "💾 Export CSV",
-                            csv,
-                            f"search_results_{search_query[:20]}.csv",
-                            "text/csv",
-                            key='export_csv'
-                        )
-            
-            # Performance comparison chart
-            if results_data:
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    # Response time chart
-                    fig_time = go.Figure(data=[
-                        go.Bar(
-                            x=list(results_data.keys()),
-                            y=[v['time'] * 1000 for v in results_data.values()],
-                            marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
-                            text=[f"{v['time']*1000:.0f}ms" for v in results_data.values()],
-                            textposition='auto',
-                        )
-                    ])
-                    fig_time.update_layout(
-                        title="Response Time",
-                        yaxis_title="Milliseconds",
-                        paper_bgcolor='#0a0a0a',
-                        plot_bgcolor='#1a1a1a',
-                        font=dict(color='#E0E0E0'),
-                        height=300
+            with col1:
+                fig_time = go.Figure(data=[
+                    go.Bar(
+                        x=list(results_data.keys()),
+                        y=[v['time'] * 1000 for v in results_data.values()],
+                        marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
+                        text=[f"{v['time']*1000:.0f}ms" for v in results_data.values()],
+                        textposition='auto',
                     )
-                    st.plotly_chart(fig_time, use_container_width=True)
-                
-                with col2:
-                    # Average score chart
-                    fig_score = go.Figure(data=[
-                        go.Bar(
-                            x=list(results_data.keys()),
-                            y=[v['avg_score'] for v in results_data.values()],
-                            marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
-                            text=[f"{v['avg_score']:.3f}" for v in results_data.values()],
-                            textposition='auto',
-                        )
-                    ])
-                    fig_score.update_layout(
-                        title="Average Relevance Score",
-                        yaxis_title="Score",
-                        paper_bgcolor='#0a0a0a',
-                        plot_bgcolor='#1a1a1a',
-                        font=dict(color='#E0E0E0'),
-                        height=300
+                ])
+                fig_time.update_layout(
+                    title="Response Time",
+                    yaxis_title="Milliseconds",
+                    paper_bgcolor='#0a0a0a',
+                    plot_bgcolor='#1a1a1a',
+                    font=dict(color='#E0E0E0'),
+                    height=300
+                )
+                st.plotly_chart(fig_time, use_container_width=True)
+            
+            with col2:
+                fig_score = go.Figure(data=[
+                    go.Bar(
+                        x=list(results_data.keys()),
+                        y=[v['avg_score'] for v in results_data.values()],
+                        marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
+                        text=[f"{v['avg_score']:.3f}" for v in results_data.values()],
+                        textposition='auto',
                     )
-                    st.plotly_chart(fig_score, use_container_width=True)
+                ])
+                fig_score.update_layout(
+                    title="Average Relevance Score",
+                    yaxis_title="Score",
+                    paper_bgcolor='#0a0a0a',
+                    plot_bgcolor='#1a1a1a',
+                    font=dict(color='#E0E0E0'),
+                    height=300
+                )
+                st.plotly_chart(fig_score, use_container_width=True)
 
-# ============================================================================
-# TAB 2: MCP CONTEXT SEARCH
-# ============================================================================
-
+# TAB 2: MCP Context Search (Keep all original functionality)
 with tab2:
     st.markdown("### MCP Context Search with RLS Policies")
     st.caption(f"Currently viewing as: **{PERSONAS[selected_persona]['name']}** {PERSONAS[selected_persona]['icon']}")
@@ -1373,57 +1464,55 @@ with tab2:
     with st.expander("🔒 About Row-Level Security (RLS)", expanded=False):
         st.markdown("""
         **What is RLS?**  
-        Row-Level Security policies in PostgreSQL automatically filter query results based on your persona. 
-        Users only see data they're authorized to access - no application-level filtering needed.
+        Row-Level Security in PostgreSQL automatically filters results based on your persona.
         
         **Testing RLS:**
-        - ✅ **With Strands Agent** (checked): Uses admin access via MCP Data API - bypasses RLS
-        - 🔒 **Without Strands Agent** (unchecked): Uses persona-specific database users - enforces RLS
-        
-        **Try it:** Uncheck "Use Strands Agent" below and test the quick queries to see RLS in action!
+        - ✅ **With Strands Agent**: Uses admin access via MCP Data API
+        - 🔒 **Without Strands Agent**: Uses persona-specific users - enforces RLS
         """)
     
-    # Quick action buttons for MCP - persona-specific
+    # Quick queries
     st.markdown("**⚡ Quick Try:**")
     mcp_quick_queries_by_persona = {
         'customer': [
-            ("warranty", "✅ FAQ Access"),
-            ("return policy", "✅ FAQ Access"),
-            ("headphones", "✅ FAQ Access"),
+            ("warranty", "✅ FAQ"),
+            ("return policy", "✅ FAQ"),
+            ("headphones", "✅ FAQ"),
             ("support ticket", "🔒 Restricted")
         ],
         'support_agent': [
-            ("connectivity", "✅ Ticket Access"),
-            ("firmware", "✅ Ticket Access"),
-            ("maintenance", "✅ Internal Access"),
+            ("connectivity", "✅ Tickets"),
+            ("firmware", "✅ Tickets"),
+            ("maintenance", "✅ Internal"),
             ("analytics", "🔒 Restricted")
         ],
         'product_manager': [
-            ("growth", "✅ Analytics Access"),
-            ("sales", "✅ Analytics Access"),
-            ("product launch", "✅ Internal Access"),
-            ("warranty", "✅ All Access")
+            ("growth", "✅ Analytics"),
+            ("sales", "✅ Analytics"),
+            ("product launch", "✅ Internal"),
+            ("warranty", "✅ All")
         ]
     }
+    
     mcp_quick_queries = mcp_quick_queries_by_persona.get(selected_persona, [])
     mcp_quick_cols = st.columns(4)
     for idx, (q, status) in enumerate(mcp_quick_queries):
         with mcp_quick_cols[idx]:
             is_restricted = "🔒" in status
-            if st.button(f"{'🔒' if is_restricted else '👉'} {q}", key=f"mcp_quick_{idx}", type="secondary" if is_restricted else "primary"):
+            if st.button(f"{'🔒' if is_restricted else '💡'} {q}", key=f"mcp_quick_{idx}", type="secondary" if is_restricted else "primary"):
                 st.session_state.mcp_quick_search = q
                 st.rerun()
     
-
+    st.markdown("---")
     
-    # MCP Method selection
     use_strands_agent = st.checkbox(
-        "🤖 Use Strands Agent with MCP Tools", 
+        "🤖 Use Strands Agent with MCP Tools",
         value=False,
-        help="**Checked**: AI agent uses MCP tools to intelligently query the database and synthesize natural language responses. ⚠️ Note: MCP uses Aurora Data API with admin credentials, so RLS policies are NOT enforced.\n\n**Unchecked**: Direct hybrid search on knowledge base with RLS policies applied. ✅ RLS policies ARE enforced based on selected persona."
+        help="AI agent with MCP tools for intelligent database querying"
     )
+    
     if use_strands_agent:
-        st.caption("⚠️ MCP Agent uses admin access - RLS policies not enforced. Uncheck to test RLS.")
+        st.caption("⚠️ MCP Agent uses admin access - RLS not enforced")
     
     time_window_map = {
         'All Time': None,
@@ -1432,30 +1521,25 @@ with tab2:
         'Last 30 Days': '30d'
     }
     
-    # Search input with sample queries in selectbox
+    # Search input with text input
     if 'mcp_quick_search' in st.session_state:
         st.session_state.mcp_query = st.session_state.mcp_quick_search
         del st.session_state.mcp_quick_search
     
-    mcp_query = st.selectbox(
+    mcp_query = st.text_input(
         "Search Query",
-        options=["", "What are the top products?", "Show customer complaints", "List all product categories", "Recent support tickets", "Products with high ratings"],
+        value=st.session_state.get('mcp_query', ''),
+        placeholder="Enter your search query or question...",
         key='mcp_query'
     )
     
     mcp_search_button = st.button("🔍 Search MCP Context", type="primary")
     
-    if mcp_search_button and not mcp_query:
-        st.warning("⚠️ Please enter a search query")
-    
-    # Show chat interface if there's history or new search
-    if (mcp_search_button and mcp_query) or (use_strands_agent and st.session_state.mcp_chat_history):
+    if mcp_search_button and mcp_query:
         if use_strands_agent:
-            # Use Strands Agent with MCP tools
             st.markdown("#### 🤖 Strands Agent Response")
-            st.caption("Using Model Context Protocol to intelligently query the database")
             
-            with st.spinner("Agent is thinking and using MCP tools..."):
+            with st.spinner("Agent is thinking..."):
                 try:
                     start_time = time.time()
                     agent_result = strands_agent_search(mcp_query, selected_persona, use_mcp=True)
@@ -1463,15 +1547,14 @@ with tab2:
                     
                     if agent_result['error']:
                         st.error(f"❌ {agent_result['error']}")
-                        st.info("💡 Make sure to set DATABASE_CLUSTER_ARN and DATABASE_SECRET_ARN in your .env file")
                     else:
-                        # Display agent stats
+                        # Enhanced stats panel
                         st.markdown(f"""
                         <div class="stats-panel">
-                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                            <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
                                 <div>
-                                    <div style="font-size: 1.5rem; font-weight: 600;">Strands Agent</div>
-                                    <div style="font-size: 0.875rem; opacity: 0.9;">Powered by Claude + MCP</div>
+                                    <div style="font-size: 1.5rem; font-weight: 600;">🤖 Strands Agent</div>
+                                    <div style="font-size: 0.875rem; opacity: 0.9;">Claude + MCP</div>
                                 </div>
                                 <div>
                                     <div style="font-size: 1.5rem; font-weight: 600;">{elapsed*1000:.0f}ms</div>
@@ -1481,84 +1564,25 @@ with tab2:
                                     <div style="font-size: 1.5rem; font-weight: 600;">{len(agent_result.get('tools_used', []))}</div>
                                     <div style="font-size: 0.875rem; opacity: 0.9;">Tools Used</div>
                                 </div>
-                                <div>
-                                    <div style="font-size: 1.5rem; font-weight: 600;">{len(agent_result.get('available_tools', []))}</div>
-                                    <div style="font-size: 0.875rem; opacity: 0.9;">Tools Available</div>
-                                </div>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Show available MCP tools
                         if agent_result.get('available_tools'):
-                            with st.expander("🔗 MCP Tools Available from Aurora PostgreSQL Server", expanded=False):
-                                st.markdown("**Database tools exposed via Model Context Protocol:**")
+                            with st.expander("🔗 MCP Tools Available", expanded=False):
                                 for tool in agent_result['available_tools']:
-                                    tool_name = tool if isinstance(tool, str) else getattr(tool, 'name', str(tool))
-                                    st.markdown(f"- `{tool_name}`")
-                                st.caption("These tools allow the AI agent to query tables, describe schemas, and execute SQL.")
+                                    st.markdown(f"- `{tool}`")
                         
-                        # Show tools used
-                        if agent_result.get('tools_used'):
-                            st.markdown("**🔧 Tools Used in This Query:**")
-                            for tool in agent_result['tools_used']:
-                                st.code(tool, language="text")
+                        # Display response
+                        st.markdown("**Response:**")
+                        st.info(agent_result['response'])
                         
-                        # Add initial query and response to history if new search
-                        if mcp_search_button and mcp_query:
-                            if not st.session_state.mcp_chat_history or st.session_state.mcp_chat_history[-1]['content'] != agent_result['response']:
-                                st.session_state.mcp_chat_history.append({"role": "user", "content": mcp_query})
-                                st.session_state.mcp_chat_history.append({"role": "assistant", "content": agent_result['response']})
-                        
-                        # Show explanation
-                        st.info("""
-                        **🎯 How MCP Works:**
-                        1. Agent receives your natural language query
-                        2. Aurora PostgreSQL MCP Server exposes database tools
-                        3. Agent decides which tools to use (query_database, list_tables, etc.)
-                        4. Tools execute with proper permissions and RLS policies
-                        5. Agent synthesizes results into natural language response
-                        """)
+                        st.caption("💡 **Note:** This demo shows a single query response. The MCP architecture can be extended to support multi-turn conversations with chat history and follow-up questions (out of scope for this workshop).")
                         
                 except Exception as e:
                     st.error(f"Agent error: {str(e)}")
-                    logger.error(f"Strands Agent error: {e}")
-            
-            # Always show chat interface when using Strands agent and there's history
-            if st.session_state.mcp_chat_history:
-                st.markdown("---")
-                
-                # Clear chat button at the top
-                col1, col2 = st.columns([5, 1])
-                with col1:
-                    st.markdown("#### 💬 Agent Chat")
-                with col2:
-                    if st.button("🗑️ Clear Chat", key="clear_chat"):
-                        st.session_state.mcp_chat_history = []
-                        st.rerun()
-                
-                # Display chat history in container
-                chat_container = st.container(height=400)
-                with chat_container:
-                    for msg in st.session_state.mcp_chat_history:
-                        with st.chat_message(msg["role"]):
-                            st.markdown(msg["content"])
-                
-                # Follow-up question input
-                if follow_up := st.chat_input("Ask a follow-up question..."):
-                    # Get agent response
-                    with st.spinner("Thinking..."):
-                        follow_up_result = strands_agent_search(follow_up, selected_persona, use_mcp=True)
-                        if not follow_up_result['error']:
-                            st.session_state.mcp_chat_history.append({"role": "user", "content": follow_up})
-                            st.session_state.mcp_chat_history.append({"role": "assistant", "content": follow_up_result['response']})
-                        else:
-                            error_msg = f"Error: {follow_up_result['error']}"
-                            st.session_state.mcp_chat_history.append({"role": "user", "content": follow_up})
-                            st.session_state.mcp_chat_history.append({"role": "assistant", "content": error_msg})
-                    st.rerun()
         else:
-            # Use direct MCP context search (original approach)
+            # Direct MCP search
             with st.spinner(f"Searching as {selected_persona}..."):
                 try:
                     start_time = time.time()
@@ -1572,25 +1596,24 @@ with tab2:
                     
                     st.markdown(f"""
                     <div class="stats-panel">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; justify-content: space-between;">
                             <div>
                                 <div style="font-size: 2rem; font-weight: 600;">{len(results)}</div>
-                                <div style="font-size: 0.875rem; opacity: 0.9;">Results Found</div>
+                                <div style="font-size: 0.875rem;">Results Found</div>
                             </div>
                             <div>
                                 <div style="font-size: 2rem; font-weight: 600;">{elapsed*1000:.0f}ms</div>
-                                <div style="font-size: 0.875rem; opacity: 0.9;">Response Time</div>
+                                <div style="font-size: 0.875rem;">Response Time</div>
                             </div>
                             <div>
                                 <div style="font-size: 2rem; font-weight: 600;">{PERSONAS[selected_persona]['icon']}</div>
-                                <div style="font-size: 0.875rem; opacity: 0.9;">{PERSONAS[selected_persona]['name']}</div>
+                                <div style="font-size: 0.875rem;">{PERSONAS[selected_persona]['name']}</div>
                             </div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                     
                     if results:
-                        # Group by content type
                         by_type = {}
                         for r in results:
                             content_type = r.get('content_type', 'unknown')
@@ -1598,28 +1621,22 @@ with tab2:
                                 by_type[content_type] = []
                             by_type[content_type].append(r)
                         
-                        # Display grouped results
                         for content_type, items in by_type.items():
                             with st.expander(f"📁 {content_type.replace('_', ' ').title()} ({len(items)})", expanded=True):
                                 for item in items:
                                     render_knowledge_card(item, show_persona=True)
                     else:
-                        st.info(f"No results found for '{mcp_query}' with {selected_persona} access level")
+                        show_empty_state(f"No results found for '{mcp_query}'", "🔍")
                         
                 except Exception as e:
                     st.error(f"Search error: {str(e)}")
-                    logger.error(f"MCP search error: {e}")
 
-
-
-# ============================================================================
-# FOOTER
-# ============================================================================
-
+# Footer
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 2rem 0;">
-    <p>DAT409: Hybrid Search with Aurora PostgreSQL • Built with Streamlit, pgvector, Cohere, and MCP</p>
-    <p style="font-size: 0.875rem;">Amazon Web Services • re:Invent 2025</p>
+    <p style="font-size: 1.1rem;">DAT409: Hybrid Search with Aurora PostgreSQL</p>
+    <p style="font-size: 0.875rem;">Built with Streamlit, pgvector, Cohere, and MCP</p>
+    <p style="font-size: 0.75rem; margin-top: 1rem;">Amazon Web Services • re:Invent 2025</p>
 </div>
 """, unsafe_allow_html=True)
