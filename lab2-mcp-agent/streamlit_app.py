@@ -1020,8 +1020,6 @@ Provide clear responses based on query results."""
         
         # Method 3: Check response.state (it's a dict)
         if hasattr(response, 'state') and isinstance(response.state, dict):
-            logger.info(f"State keys: {list(response.state.keys())}")
-            
             # Check for messages in state
             if 'messages' in response.state:
                 messages = response.state['messages']
@@ -1899,7 +1897,7 @@ with tab3:
             overlap_data.append(row)
         
         df_overlap = pd.DataFrame(overlap_data, columns=methods, index=methods)
-        st.dataframe(df_overlap, use_container_width=True)
+        st.dataframe(df_overlap, width='stretch')
         
     else:
         st.info("👉 Run a search in Tab 1 to see result overlap analysis")
