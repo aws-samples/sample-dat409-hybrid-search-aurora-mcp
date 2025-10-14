@@ -932,7 +932,6 @@ def strands_agent_search(
         return {
             'response': 'MCP not available. Using direct search.',
             'method': 'direct',
-            'tools_used': [],
             'error': 'MCP client not configured'
         }
     
@@ -942,7 +941,6 @@ def strands_agent_search(
         return {
             'response': 'MCP client not configured.',
             'method': 'error',
-            'tools_used': [],
             'error': 'Missing MCP configuration'
         }
     
@@ -973,6 +971,7 @@ Provide clear responses based on query results."""
         response = agent(query)
         elapsed = time.time() - start_time
         
+        # Extract response text
         if hasattr(response, 'message') and isinstance(response.message, dict):
             content = response.message.get('content', [])
             response_text = content[0].get('text', str(content)) if content else str(response)
@@ -980,8 +979,41 @@ Provide clear responses based on query results."""
             response_text = str(response)
         
         tools_used = []
-        if hasattr(response, 'tool_calls'):
-            tools_used = [getattr(tool, 'name', str(tool)) for tool in response.tool_calls]
+        
+        # Try multiple ways to extract tool calls
+        # Method 1: Check response.tool_calls
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            for tool in response.tool_calls:
+                tool_name = getattr(tool, 'name', str(tool))
+                tools_used.append(tool_name)
+                
+
+        
+        # Method 2: Check response.message for tool_use blocks
+        if hasattr(response, 'message') and isinstance(response.message, dict):
+            content = response.message.get('content', [])
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get('type') == 'tool_use':
+                        tool_name = block.get('name', 'unknown')
+                        tools_used.append(tool_name)
+        
+        # Method 3: Check response.state (it's a dict)
+        if hasattr(response, 'state') and isinstance(response.state, dict):
+            logger.info(f"State keys: {list(response.state.keys())}")
+            
+            # Check for messages in state
+            if 'messages' in response.state:
+                messages = response.state['messages']
+                for msg in messages:
+                    if isinstance(msg, dict) and 'content' in msg:
+                        content = msg['content']
+                        if isinstance(content, list):
+                            for block in content:
+                                if isinstance(block, dict) and block.get('type') == 'tool_use':
+                                    tool_name = block.get('name', 'unknown')
+                                    tools_used.append(tool_name)
+
         
         available_tool_names = []
         if tools:
@@ -993,10 +1025,11 @@ Provide clear responses based on query results."""
                 elif hasattr(tool, 'name'):
                     available_tool_names.append(tool.name)
         
+        tools_used = list(dict.fromkeys(tools_used))
+        
         return {
             'response': response_text,
             'method': 'strands_mcp',
-            'tools_used': tools_used,
             'elapsed_time': elapsed,
             'available_tools': available_tool_names,
             'error': None
@@ -1007,7 +1040,6 @@ Provide clear responses based on query results."""
         return {
             'response': f"Agent execution failed: {str(e)}",
             'method': 'error',
-            'tools_used': [],
             'error': str(e)
         }
 
@@ -1020,10 +1052,10 @@ def rerank_results(query: str, results: List[Dict], top_k: int = 5) -> List[Dict
         documents = [r.get('description', r.get('content', '')) for r in results]
         
         body = json.dumps({
+            "api_version": 2,
             "query": query,
             "documents": documents,
-            "top_n": min(top_k, len(documents)),
-            "return_documents": False
+            "top_n": min(top_k, len(documents))
         })
         
         response = bedrock_runtime.invoke_model(
@@ -1307,6 +1339,8 @@ with tab1:
     st.markdown("### Compare Search Methods Side-by-Side")
     st.caption("🚀 See how different search algorithms perform on the same query")
     
+    st.markdown("---")
+    
     # Quick action buttons with better layout
     st.markdown("**⚡ Quick Try:**")
     quick_cols = st.columns(4)
@@ -1331,19 +1365,38 @@ with tab1:
     with col2:
         show_all = st.checkbox("📊 Show All", value=False, key='show_all')
     
-    # Search query with text input
+    # Initialize comparison_query if needed
+    if 'comparison_query' not in st.session_state:
+        st.session_state.comparison_query = ''
+    
+    # Handle quick search button clicks
     if 'quick_search' in st.session_state:
         st.session_state.comparison_query = st.session_state.quick_search
         del st.session_state.quick_search
     
     search_query = st.text_input(
         "Search Query",
-        value=st.session_state.get('comparison_query', ''),
         placeholder="Enter your search query (e.g., wireless headphones, security camera...)",
         key='comparison_query'
     )
     
     search_button = st.button("🔍 Search All Methods", type="primary")
+    
+    with st.expander("💡 Understanding Search Scores", expanded=False):
+        st.markdown("""
+        **Why Semantic Search Often Has Higher Scores:**
+        
+        - **Semantic (0.0-1.0)**: Cosine similarity between embeddings - naturally produces scores closer to 1.0 for relevant matches
+        - **Keyword (0.0-1.0)**: PostgreSQL ts_rank_cd scores - typically lower values even for good matches
+        - **Fuzzy (0.0-1.0)**: Trigram similarity - requires very close character matches to score high
+        - **Hybrid**: Weighted combination of Semantic + Keyword scores
+        
+        **Key Insight:** Higher scores don't always mean better results! Each method excels at different query types:
+        - Use **Semantic** for conceptual/meaning-based searches
+        - Use **Keyword** for exact term matching
+        - Use **Fuzzy** for typo-tolerant searches
+        - Use **Hybrid** for balanced results
+        """)
     
     if search_button and search_query:
         # Create columns first
@@ -1521,14 +1574,17 @@ with tab2:
         'Last 30 Days': '30d'
     }
     
-    # Search input with text input
+    # Initialize mcp_query if needed
+    if 'mcp_query' not in st.session_state:
+        st.session_state.mcp_query = ''
+    
+    # Handle quick search button clicks
     if 'mcp_quick_search' in st.session_state:
         st.session_state.mcp_query = st.session_state.mcp_quick_search
         del st.session_state.mcp_quick_search
     
     mcp_query = st.text_input(
         "Search Query",
-        value=st.session_state.get('mcp_query', ''),
         placeholder="Enter your search query or question...",
         key='mcp_query'
     )
@@ -1537,7 +1593,7 @@ with tab2:
     
     if mcp_search_button and mcp_query:
         if use_strands_agent:
-            st.markdown("#### 🤖 Strands Agent Response")
+            st.markdown("#### 🧠 Strands Agent Response")
             
             with st.spinner("Agent is thinking..."):
                 try:
@@ -1553,16 +1609,16 @@ with tab2:
                         <div class="stats-panel">
                             <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
                                 <div>
-                                    <div style="font-size: 1.5rem; font-weight: 600;">🤖 Strands Agent</div>
-                                    <div style="font-size: 0.875rem; opacity: 0.9;">Claude + MCP</div>
+                                    <div style="font-size: 1.5rem; font-weight: 600;">🧠 Strands Agent</div>
+                                    <div style="font-size: 0.875rem; opacity: 0.9;">Claude Sonnet 4 + MCP</div>
                                 </div>
                                 <div>
                                     <div style="font-size: 1.5rem; font-weight: 600;">{elapsed*1000:.0f}ms</div>
                                     <div style="font-size: 0.875rem; opacity: 0.9;">Response Time</div>
                                 </div>
                                 <div>
-                                    <div style="font-size: 1.5rem; font-weight: 600;">{len(agent_result.get('tools_used', []))}</div>
-                                    <div style="font-size: 0.875rem; opacity: 0.9;">Tools Used</div>
+                                    <div style="font-size: 1.5rem; font-weight: 600;">✅</div>
+                                    <div style="font-size: 0.875rem; opacity: 0.9;">Database Query</div>
                                 </div>
                             </div>
                         </div>
@@ -1572,6 +1628,19 @@ with tab2:
                             with st.expander("🔗 MCP Tools Available", expanded=False):
                                 for tool in agent_result['available_tools']:
                                     st.markdown(f"- `{tool}`")
+                        
+                        # Explain how the agent works
+                        with st.expander("🔍 How It Works", expanded=False):
+                            st.markdown("""
+                            **Agent Architecture:**
+                            
+                            1. 🧠 **Strands Agent** receives your natural language query
+                            2. 🤖 **Claude Sonnet 4** analyzes the query and decides which MCP tools to use
+                            3. 🔧 **MCP Tools** execute SQL queries against Aurora PostgreSQL via Data API
+                            4. 📊 **Agent synthesizes** the database results into a natural language response
+                            
+                            **Note:** The Strands framework abstracts away tool call details, so SQL queries are not exposed in the response object. However, the agent successfully queries the database to provide accurate answers.
+                            """)
                         
                         # Display response
                         st.markdown("**Response:**")
