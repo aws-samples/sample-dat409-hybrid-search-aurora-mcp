@@ -17,7 +17,7 @@
 
 </div>
 
-> **WARNING**: For demonstration and educational purposes only. Not intended for production use.
+> ⚠️ **WARNING**: For demonstration and educational purposes only. Not intended for production use.
 
 ## 🚀 Quick Start
 
