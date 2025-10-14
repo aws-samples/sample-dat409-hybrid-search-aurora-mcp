@@ -1224,9 +1224,12 @@ if 'performance_metrics' not in st.session_state:
 st.markdown("""
 <div style="text-align: center; padding: 2rem 0;">
     <h1 style="font-size: 3rem; margin-bottom: 0.5rem; color: #FFFFFF; font-weight: 600;">
-        DAT409 | Hybrid Search with MCP
+        Hybrid Search with Aurora PostgreSQL for MCP Retrieval
     </h1>
-    <p style="color: #B0B0B0; font-size: 1.2rem; margin-top: 1rem;">
+    <p style="color: #00D9FF; font-size: 1.1rem; margin-top: 0.5rem; font-weight: 500;">
+        ⚡ Powering AI Agents with Enterprise-Grade Search
+    </p>
+    <p style="color: #B0B0B0; font-size: 1rem; margin-top: 0.5rem;">
         Aurora PostgreSQL • pgvector • Cohere • Model Context Protocol
     </p>
 </div>
