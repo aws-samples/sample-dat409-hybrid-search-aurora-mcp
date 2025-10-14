@@ -22,7 +22,7 @@
 
 **Workshop Duration**: 60 minutes | **Lab 1**: 25 min | **Lab 2**: 20 min
 
-Build production-grade hybrid search combining semantic similarity, lexical matching, and fuzzy search with Aurora PostgreSQL. Integrate Model Context Protocol (MCP) for natural language database queries with enterprise-grade Row-Level Security (RLS).
+Build enterprise-grade hybrid search combining semantic similarity, lexical matching, and fuzzy search with Aurora PostgreSQL. Integrate Model Context Protocol (MCP) for natural language database queries with enterprise-grade Row-Level Security (RLS).
 
 ## 📁 Repository Structure
 
