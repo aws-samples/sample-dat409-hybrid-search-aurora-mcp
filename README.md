@@ -49,7 +49,7 @@ Build enterprise-grade hybrid search combining semantic similarity, lexical matc
 
 ## 🎯 Labs
 
-### Lab 1: Production Hybrid Search Architecture (25 min)
+### Lab 1: Foundational Hybrid Search Architecture (25 min)
 
 Build a multi-modal retrieval system combining three complementary search techniques over 21,704 products:
 
