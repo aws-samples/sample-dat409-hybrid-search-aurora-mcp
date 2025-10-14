@@ -1241,7 +1241,7 @@ with st.sidebar:
     
     # Persona selection with enhanced styling
     st.markdown("### 👤 Persona (RLS)")
-    st.caption("⚠️ Used in Tab 2 only")
+    st.caption("⚠️ Used in MCP Context Search (Tab 2) only")
     selected_persona = st.selectbox(
         "Select Role",
         options=list(PERSONAS.keys()),
