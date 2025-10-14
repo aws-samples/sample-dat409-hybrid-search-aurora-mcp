@@ -1348,6 +1348,35 @@ with st.sidebar:
             if st.button("🔄 Retry Connection", key="retry_db"):
                 st.rerun()
     
+    # Advanced Index Information (400-level)
+    with st.expander("🔧 Index Performance (Advanced)", expanded=False):
+        st.caption("PostgreSQL index configuration and performance")
+        
+        try:
+            conn = get_db_connection()
+            
+            # Get HNSW index info
+            st.markdown("**Vector Index (HNSW):**")
+            st.code("""CREATE INDEX ON product_catalog 
+USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64);""")
+            st.caption("• m=16: Max connections per layer (higher = better recall, more memory)")
+            st.caption("• ef_construction=64: Build-time search depth (higher = better quality)")
+            
+            st.markdown("**Full-Text Index (GIN):**")
+            st.code("""CREATE INDEX ON product_catalog 
+USING gin(to_tsvector('english', product_description));""")
+            st.caption("• GIN index for fast full-text search with stemming")
+            
+            st.markdown("**Trigram Index (GIN):**")
+            st.code("""CREATE INDEX ON product_catalog 
+USING gin(product_description gin_trgm_ops);""")
+            st.caption("• Trigram index for fuzzy matching (similarity threshold: 0.1)")
+            
+            conn.close()
+        except Exception as e:
+            st.caption("Index information unavailable")
+    
     # Search History with better formatting
     if st.session_state.search_history:
         st.markdown("---")
@@ -1361,9 +1390,10 @@ with st.sidebar:
 # MAIN TABS
 # ============================================================================
 
-tab1, tab2 = st.tabs([
+tab1, tab2, tab3 = st.tabs([
     "🔍 Search Comparison",
-    "🎯 MCP Context Search"
+    "🎯 MCP Context Search",
+    "🔬 Advanced Analysis"
 ])
 
 # TAB 1: Enhanced Search Comparison
@@ -1731,6 +1761,250 @@ with tab2:
                         
                 except Exception as e:
                     st.error(f"Search error: {str(e)}")
+
+# TAB 3: Advanced Analysis
+with tab3:
+    st.markdown("### 🔬 Advanced Analysis & Optimization")
+    st.caption("🎯 Deep dive into query analysis, result overlap, and index configuration")
+    
+    # Section 1: Query Analysis
+    st.markdown("---")
+    st.markdown("## 🧠 Query Analysis")
+    
+    if 'comparison_query' in st.session_state and st.session_state.comparison_query:
+        search_query = st.session_state.comparison_query
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        # Query characteristics
+        word_count = len(search_query.split())
+        char_count = len(search_query)
+        has_special = any(c in search_query for c in ['-', '_', '/', '&'])
+        is_phrase = word_count > 3
+        
+        with col1:
+            st.metric("Words", word_count)
+        with col2:
+            st.metric("Characters", char_count)
+        with col3:
+            st.metric("Type", "Phrase" if is_phrase else "Keywords")
+        with col4:
+            st.metric("Special Chars", "✅" if has_special else "❌")
+        
+        # Recommended search method
+        st.markdown("### 🎯 Recommended Search Method")
+        if word_count == 1:
+            recommendation = "**Fuzzy Search** - Single word queries benefit from typo tolerance"
+            reason = "Fuzzy matching handles misspellings and variations effectively for single terms."
+        elif word_count <= 3 and not has_special:
+            recommendation = "**Keyword Search** - Short queries work well with full-text search"
+            reason = "PostgreSQL full-text search excels at exact term matching with stemming."
+        elif is_phrase:
+            recommendation = "**Semantic Search** - Long phrases capture intent better with embeddings"
+            reason = "Vector embeddings understand context and meaning in longer queries."
+        else:
+            recommendation = "**Hybrid Search** - Balanced approach for mixed queries"
+            reason = "Combines semantic understanding with keyword precision for optimal results."
+        
+        st.info(f"{recommendation}\n\n{reason}")
+        
+        # Query preprocessing insights
+        st.markdown("### 🔧 Preprocessing Pipeline")
+        preprocessing_cols = st.columns(3)
+        with preprocessing_cols[0]:
+            st.markdown("""
+            **Text Normalization**
+            - ✅ Lowercase conversion
+            - ✅ Whitespace trimming
+            - ✅ Special char handling
+            """)
+        with preprocessing_cols[1]:
+            st.markdown("""
+            **Embedding Generation**
+            - ✅ Cohere Embed v3
+            - ✅ 1024 dimensions
+            - ✅ Cosine similarity
+            """)
+        with preprocessing_cols[2]:
+            st.markdown("""
+            **Tokenization**
+            - ✅ Trigram generation
+            - ✅ English stemming
+            - ✅ Stop word filtering
+            """)
+    else:
+        st.info("👉 Run a search in Tab 1 to see query analysis")
+    
+    # Section 2: Result Overlap Analysis
+    st.markdown("---")
+    st.markdown("## 📊 Result Overlap Analysis")
+    st.caption("Understanding how different search methods agree on relevant results")
+    
+    # Get product IDs from each method
+    method_results = {}
+    for method_name in ['Keyword', 'Fuzzy', 'Semantic', 'Hybrid']:
+        if f'results_{method_name}' in st.session_state:
+            method_results[method_name] = set(
+                r['productId'] for r in st.session_state[f'results_{method_name}']
+            )
+    
+    if len(method_results) >= 2:
+        # Calculate overlaps
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total Unique Products", len(set().union(*method_results.values())))
+        
+        with col2:
+            # Products in all methods
+            common_all = set.intersection(*method_results.values()) if method_results else set()
+            st.metric("In All Methods", len(common_all))
+        
+        with col3:
+            # Average overlap
+            overlaps = []
+            methods = list(method_results.keys())
+            for i in range(len(methods)):
+                for j in range(i+1, len(methods)):
+                    overlap = len(method_results[methods[i]] & method_results[methods[j]])
+                    overlaps.append(overlap)
+            avg_overlap = sum(overlaps) / len(overlaps) if overlaps else 0
+            st.metric("Avg Pairwise Overlap", f"{avg_overlap:.1f}")
+        
+        # Method-specific unique results
+        st.markdown("### Unique Results per Method")
+        unique_cols = st.columns(4)
+        for idx, (method, ids) in enumerate(method_results.items()):
+            other_ids = set().union(*[v for k, v in method_results.items() if k != method])
+            unique = ids - other_ids
+            with unique_cols[idx]:
+                st.metric(method, len(unique), delta=f"{len(unique)} unique")
+        
+        st.info("💡 **Interpretation:** High overlap indicates methods agree on relevance. Low overlap means methods find different aspects of the query.")
+        
+        # Pairwise overlap matrix
+        st.markdown("### Pairwise Overlap Matrix")
+        overlap_data = []
+        for m1 in methods:
+            row = []
+            for m2 in methods:
+                if m1 == m2:
+                    row.append(len(method_results[m1]))
+                else:
+                    row.append(len(method_results[m1] & method_results[m2]))
+            overlap_data.append(row)
+        
+        df_overlap = pd.DataFrame(overlap_data, columns=methods, index=methods)
+        st.dataframe(df_overlap, use_container_width=True)
+        
+    else:
+        st.info("👉 Run a search in Tab 1 to see result overlap analysis")
+    
+    # Section 3: Index Performance
+    st.markdown("---")
+    st.markdown("## 🔧 Index Configuration & Performance")
+    st.caption("PostgreSQL index setup and tuning parameters for production")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("### Vector Index (HNSW)")
+        st.code("""CREATE INDEX ON product_catalog 
+USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64);""")
+        st.markdown("""
+        **Parameters:**
+        - `m=16`: Max connections per layer
+          - Higher = better recall, more memory
+          - Typical range: 8-64
+        - `ef_construction=64`: Build-time search
+          - Higher = better quality, slower build
+          - Typical range: 32-512
+        """)
+    
+    with col2:
+        st.markdown("### Full-Text Index (GIN)")
+        st.code("""CREATE INDEX ON product_catalog 
+USING gin(
+  to_tsvector('english', 
+              product_description)
+);""")
+        st.markdown("""
+        **Features:**
+        - English language stemming
+        - Stop word removal
+        - Fast phrase matching
+        - Supports ranking (ts_rank)
+        """)
+    
+    with col3:
+        st.markdown("### Trigram Index (GIN)")
+        st.code("""CREATE INDEX ON product_catalog 
+USING gin(
+  product_description 
+  gin_trgm_ops
+);""")
+        st.markdown("""
+        **Configuration:**
+        - Similarity threshold: 0.1
+        - Trigram tokenization
+        - Fuzzy matching support
+        - Typo tolerance
+        """)
+    
+    # Performance recommendations
+    st.markdown("---")
+    st.markdown("## 🚀 Production Tuning Recommendations")
+    
+    rec_col1, rec_col2 = st.columns(2)
+    
+    with rec_col1:
+        st.markdown("""
+        ### Query Optimization
+        - ✅ Use HNSW for semantic search (10-100x faster than IVFFlat)
+        - ✅ Set appropriate `ef_search` for recall/speed tradeoff
+        - ✅ Combine with WHERE clauses for filtered search
+        - ✅ Use EXPLAIN ANALYZE to profile queries
+        - ✅ Consider query result caching for common searches
+        """)
+    
+    with rec_col2:
+        st.markdown("""
+        ### Index Maintenance
+        - ✅ Monitor index bloat with pg_stat_user_indexes
+        - ✅ VACUUM ANALYZE after bulk updates
+        - ✅ Adjust work_mem for large index builds
+        - ✅ Use parallel index creation for large tables
+        - ✅ Consider partitioning for very large datasets (>10M rows)
+        """)
+    
+    st.markdown("---")
+    st.markdown("## 📚 Additional Resources")
+    
+    resource_cols = st.columns(3)
+    with resource_cols[0]:
+        st.markdown("""
+        **pgvector Documentation**
+        - [GitHub Repository](https://github.com/pgvector/pgvector)
+        - [HNSW Algorithm](https://arxiv.org/abs/1603.09320)
+        - [Performance Tuning](https://github.com/pgvector/pgvector#performance)
+        """)
+    
+    with resource_cols[1]:
+        st.markdown("""
+        **PostgreSQL Full-Text Search**
+        - [Official Docs](https://www.postgresql.org/docs/current/textsearch.html)
+        - [GIN Indexes](https://www.postgresql.org/docs/current/gin.html)
+        - [pg_trgm Extension](https://www.postgresql.org/docs/current/pgtrgm.html)
+        """)
+    
+    with resource_cols[2]:
+        st.markdown("""
+        **Aurora PostgreSQL**
+        - [User Guide](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/)
+        - [Best Practices](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.BestPractices.html)
+        - [Performance Insights](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_PerfInsights.html)
+        """)
 
 # Footer
 st.markdown("---")
