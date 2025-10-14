@@ -13,7 +13,6 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
 
 [![License](https://img.shields.io/badge/License-MIT--0-green?style=for-the-badge)](LICENSE)
-[![Workshop Level](https://img.shields.io/badge/Level-400_Advanced-orange?style=for-the-badge)]()
 
 </div>
 
