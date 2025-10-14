@@ -1467,8 +1467,8 @@ with tab2:
         Row-Level Security in PostgreSQL automatically filters results based on your persona.
         
         **Testing RLS:**
-        - ✅ **With Strands Agent**: Uses admin access via MCP Data API
-        - 🔒 **Without Strands Agent**: Uses persona-specific users - enforces RLS
+        - 🧠 **With Strands Agent**: Uses admin access via MCP Data API (typical for AI agents that need to query across schemas)
+        - 🔒 **Without Strands Agent**: Uses persona-specific database users - enforces RLS at database level
         """)
     
     # Quick queries
@@ -1512,7 +1512,7 @@ with tab2:
     )
     
     if use_strands_agent:
-        st.caption("⚠️ MCP Agent uses admin access - RLS not enforced")
+        st.caption("💡 MCP Agent uses admin access (via Data API) for intelligent cross-table queries. In production, implement application-level authorization.")
     
     time_window_map = {
         'All Time': None,
