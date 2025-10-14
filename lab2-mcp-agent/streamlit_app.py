@@ -1506,7 +1506,7 @@ with tab2:
     st.markdown("---")
     
     use_strands_agent = st.checkbox(
-        "🤖 Use Strands Agent with MCP Tools",
+        "🧠 Use Strands Agent with MCP Tools",
         value=False,
         help="AI agent with MCP tools for intelligent database querying"
     )
