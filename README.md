@@ -125,7 +125,7 @@ streamlit run streamlit_app.py  # Optional demo UI
 
 **Participants**: Access Code Editor via CloudFront URL → Open Lab 1 notebook in `/workshop/lab1-hybrid-search/notebook/`
 
-## Technical Stack
+## Technology Stack
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
