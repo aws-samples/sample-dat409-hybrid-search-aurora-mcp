@@ -1266,8 +1266,54 @@ with st.sidebar:
     
     st.markdown("---")
     
+    # Database status with enhanced visuals
+    st.markdown("### 📊 Database Status")
+    
+    if 'db_connected' not in st.session_state:
+        st.session_state.db_connected = False
+    
+    try:
+        conn = get_db_connection()
+        
+        result = conn.execute(
+            "SELECT COUNT(*) FROM bedrock_integration.product_catalog"
+        ).fetchone()
+        product_count = result[0]
+        
+        result = conn.execute(
+            "SELECT COUNT(*) FROM bedrock_integration.product_catalog WHERE embedding IS NOT NULL"
+        ).fetchone()
+        embedding_count = result[0]
+        
+        result = conn.execute(
+            "SELECT COUNT(*) FROM knowledge_base"
+        ).fetchone()
+        kb_count = result[0]
+        
+        conn.close()
+        st.session_state.db_connected = True
+        
+        st.success("✅ Connected")
+        
+        # Show metrics with animation
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Products", f"{product_count:,}")
+            st.metric("KB Items", f"{kb_count:,}")
+        with col2:
+            st.metric("Embeddings", f"{embedding_count:,}")
+            st.metric("Status", "🟢 Online")
+        
+    except Exception as e:
+        st.session_state.db_connected = False
+        st.error("❌ Connection Failed")
+        if st.button("🔄 Retry Connection", key="retry_db"):
+            st.rerun()
+    
+    st.markdown("---")
+    
     # Hybrid weights with visual feedback
-    with st.expander("⚖️ Hybrid Search Weights", expanded=True):
+    with st.expander("⚖️ Hybrid Search Weights", expanded=False):
         semantic_weight = st.slider(
             "Semantic",
             min_value=0.0,
@@ -1290,10 +1336,8 @@ with st.sidebar:
         if total_weight > 0:
             st.caption(f"📊 Normalized: {semantic_weight/total_weight:.1%} / {keyword_weight/total_weight:.1%}")
     
-    st.markdown("---")
-    
     # Search options in collapsible section
-    with st.expander("🔧 Search Options", expanded=True):
+    with st.expander("🔧 Search Options", expanded=False):
         results_limit = st.slider("Results per method", 1, 20, 5, key='results_limit')
         
         time_filter = st.selectbox(
@@ -1301,51 +1345,6 @@ with st.sidebar:
             options=['All Time', 'Last 24 Hours', 'Last 7 Days', 'Last 30 Days'],
             key='time_filter'
         )
-    
-    st.markdown("---")
-    
-    # Database status with enhanced visuals
-    with st.expander("📊 Database Status", expanded=True):
-        if 'db_connected' not in st.session_state:
-            st.session_state.db_connected = False
-        
-        try:
-            conn = get_db_connection()
-            
-            result = conn.execute(
-                "SELECT COUNT(*) FROM bedrock_integration.product_catalog"
-            ).fetchone()
-            product_count = result[0]
-            
-            result = conn.execute(
-                "SELECT COUNT(*) FROM bedrock_integration.product_catalog WHERE embedding IS NOT NULL"
-            ).fetchone()
-            embedding_count = result[0]
-            
-            result = conn.execute(
-                "SELECT COUNT(*) FROM knowledge_base"
-            ).fetchone()
-            kb_count = result[0]
-            
-            conn.close()
-            st.session_state.db_connected = True
-            
-            st.success("✅ Connected")
-            
-            # Show metrics with animation
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Products", f"{product_count:,}")
-                st.metric("KB Items", f"{kb_count:,}")
-            with col2:
-                st.metric("Embeddings", f"{embedding_count:,}")
-                st.metric("Status", "🟢 Online")
-            
-        except Exception as e:
-            st.session_state.db_connected = False
-            st.error("❌ Connection Failed")
-            if st.button("🔄 Retry Connection", key="retry_db"):
-                st.rerun()
     
     # Advanced Index Information (400-level)
     with st.expander("🔧 Index Performance (Advanced)", expanded=False):
@@ -1731,7 +1730,7 @@ with tab2:
                         
                         # Display response
                         st.markdown("**Response:**")
-                        st.info(agent_result['response'])
+                        st.markdown(agent_result['response'])
                         
                         st.caption("💡 **Note:** This demo shows a single query response. The MCP architecture can be extended to support multi-turn conversations with chat history and follow-up questions (out of scope for this workshop).")
                         
