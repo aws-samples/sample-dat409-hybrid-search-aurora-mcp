@@ -71,8 +71,29 @@ streamlit run streamlit_app.py  # Optional demo
 - **Embeddings**: Cohere Embed English v3 (1024 dimensions)
 - **Search**: HNSW vector index + GIN full-text + pg_trgm fuzzy
 - **MCP**: Model Context Protocol for database access
+- **AI Agent**: Strands Agent with Claude Sonnet 4 + MCP tools
 - **RLS**: Row-Level Security for persona-based access
 - **Python**: 3.13 with pandas, psycopg, boto3, streamlit
+
+## 🤖 MCP Agent Architecture
+
+The workshop demonstrates natural language database queries using a **Strands Agent** with **MCP tools**:
+
+```
+User Query → Strands Agent (Claude Sonnet 4) → MCP Client → Aurora PostgreSQL (Data API)
+```
+
+**Key Components:**
+- **Strands Agent**: AI agent framework with tool-calling capabilities
+- **MCP Client**: Provides standardized database access tools via `awslabs.postgres-mcp-server`
+- **Claude Sonnet 4**: Interprets queries and decides which MCP tools to call
+- **Aurora Data API**: Serverless database access using cluster ARN + secret ARN
+
+**Why This Pattern?**
+- Agent uses admin access via Data API for intelligent cross-schema queries
+- Application-level authorization handles security (typical production pattern for AI agents)
+- MCP provides standardized, reusable database tools
+- Enables natural language → SQL translation with context awareness
 
 ## 📚 Resources
 - [DEPLOYMENT_SEQUENCE.md](DEPLOYMENT_SEQUENCE.md) | [Aurora PostgreSQL](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/) | [pgvector](https://github.com/pgvector/pgvector) | [MCP](https://modelcontextprotocol.io/)
