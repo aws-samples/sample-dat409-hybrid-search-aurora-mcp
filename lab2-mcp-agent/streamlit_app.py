@@ -208,6 +208,12 @@ st.markdown("""
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
         overflow: hidden;
+        min-height: 150px;
+    }
+    
+    .product-details {
+        flex: 1;
+        min-width: 0;
     }
     
     .product-card::before {
@@ -240,6 +246,14 @@ st.markdown("""
         padding: 0.5rem;
         background: #0a0a0a;
         transition: transform 0.3s ease;
+        flex-shrink: 0;
+        display: block;
+    }
+    
+    .product-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
     }
     
     .product-card:hover .product-image {
@@ -682,6 +696,7 @@ def keyword_search(query: str, limit: int = 10, persona: str = None) -> List[Dic
                 p.stars,
                 p.reviews,
                 p.imgurl,
+                p.producturl,
                 ts_rank_cd(
                     to_tsvector('english', p.product_description), 
                     plainto_tsquery('english', %s)
@@ -701,7 +716,8 @@ def keyword_search(query: str, limit: int = 10, persona: str = None) -> List[Dic
             'stars': float(r[4]) if r[4] else 0,
             'reviews': int(r[5]) if r[5] else 0,
             'imgUrl': r[6],
-            'score': float(r[7]) if r[7] else 0,
+            'productUrl': r[7],
+            'score': float(r[8]) if r[8] else 0,
             'method': 'Keyword'
         } for r in results]
     finally:
@@ -723,6 +739,7 @@ def fuzzy_search(query: str, limit: int = 10, persona: str = None) -> List[Dict]
                 stars,
                 reviews,
                 imgurl,
+                producturl,
                 similarity(lower(product_description), lower(%s)) as sim
             FROM bedrock_integration.product_catalog
             WHERE lower(product_description) %% lower(%s)
@@ -738,7 +755,8 @@ def fuzzy_search(query: str, limit: int = 10, persona: str = None) -> List[Dict]
             'stars': float(r[4]) if r[4] else 0,
             'reviews': int(r[5]) if r[5] else 0,
             'imgUrl': r[6],
-            'score': float(r[7]) if r[7] else 0,
+            'productUrl': r[7],
+            'score': float(r[8]) if r[8] else 0,
             'method': 'Fuzzy'
         } for r in results]
     finally:
@@ -762,6 +780,7 @@ def semantic_search(query: str, limit: int = 10, persona: str = None) -> List[Di
                 stars,
                 reviews,
                 imgurl,
+                producturl,
                 1 - (embedding <=> %s::vector) as similarity
             FROM bedrock_integration.product_catalog
             WHERE embedding IS NOT NULL
@@ -777,7 +796,8 @@ def semantic_search(query: str, limit: int = 10, persona: str = None) -> List[Di
             'stars': float(r[4]) if r[4] else 0,
             'reviews': int(r[5]) if r[5] else 0,
             'imgUrl': r[6],
-            'score': float(r[7]) if r[7] else 0,
+            'productUrl': r[7],
+            'score': float(r[8]) if r[8] else 0,
             'method': 'Semantic'
         } for r in results]
     finally:
@@ -1097,15 +1117,27 @@ def render_product_card(product: Dict, show_score: bool = True):
     score = product.get('rerank_score', product.get('score', 0))
     score_percent = min(score * 100, 100)
     
+    product_url = product.get('productUrl', '')
+    img_url = product.get('imgUrl', '')
+    description = product.get('description', 'No description')
+    
+    # Make title and image clickable if URL exists
+    if product_url:
+        img_html = f'<a href="{product_url}" target="_blank"><img src="{img_url}" class="product-image" alt="Product" loading="lazy"></a>'
+        title_html = f'<a href="{product_url}" target="_blank" class="product-title">{description}</a>'
+    else:
+        img_html = f'<img src="{img_url}" class="product-image" alt="Product" loading="lazy">'
+        title_html = f'<div class="product-title">{description}</div>'
+    
     st.markdown(f"""
     <div class="product-card">
-        <img src="{product.get('imgUrl', '')}" class="product-image" alt="Product" loading="lazy">
+        {img_html}
         <div class="product-details">
             <div>
                 <span class="method-badge {badge_class}">{method}</span>
                 {f'<span style="color: #B0B0B0; font-size: 0.75rem;">Score: {score:.3f}</span>' if show_score else ''}
             </div>
-            <div class="product-title">{product.get('description', 'No description')}</div>
+            {title_html}
             <div class="product-price">${product.get('price', 0):.2f}</div>
             <div class="product-meta">
                 ⭐ {product.get('stars', 0):.1f} | 
