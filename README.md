@@ -96,7 +96,7 @@ User Query → Strands Agent (Claude Sonnet 4) → MCP Client → Aurora Postgre
 - Enables natural language → SQL translation with context awareness
 
 ## 📚 Resources
-- [DEPLOYMENT_SEQUENCE.md](DEPLOYMENT_SEQUENCE.md) | [Aurora PostgreSQL](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/) | [pgvector](https://github.com/pgvector/pgvector) | [MCP](https://modelcontextprotocol.io/)
+[Aurora PostgreSQL](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/) | [pgvector](https://github.com/pgvector/pgvector) | [MCP](https://modelcontextprotocol.io/)
 
 ## ⭐ Like This Workshop?
 
