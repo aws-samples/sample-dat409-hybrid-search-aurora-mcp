@@ -1161,8 +1161,8 @@ if 'performance_metrics' not in st.session_state:
 # Enhanced Header with gradient effect
 st.markdown("""
 <div style="text-align: center; padding: 2rem 0;">
-    <h1 style="font-size: 3rem; margin-bottom: 0.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-        🔍 DAT409 | Hybrid Search with MCP
+    <h1 style="font-size: 3rem; margin-bottom: 0.5rem; color: #FFFFFF; font-weight: 600;">
+        DAT409 | Hybrid Search with MCP
     </h1>
     <p style="color: #B0B0B0; font-size: 1.2rem; margin-top: 1rem;">
         Aurora PostgreSQL • pgvector • Cohere • Model Context Protocol
