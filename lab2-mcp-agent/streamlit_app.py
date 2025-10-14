@@ -1393,7 +1393,7 @@ USING gin(product_description gin_trgm_ops);""")
 tab1, tab2, tab3 = st.tabs([
     "🔍 Search Comparison",
     "🎯 MCP Context Search",
-    "🔬 Advanced Analysis"
+    "🔬 Advanced Analysis (OPTIONAL)"
 ])
 
 # TAB 1: Enhanced Search Comparison
@@ -1766,6 +1766,10 @@ with tab2:
 with tab3:
     st.markdown("### 🔬 Advanced Analysis & Optimization")
     st.caption("🎯 Deep dive into query analysis, result overlap, and index configuration")
+    
+    st.info("ℹ️ **Note:** This tab is optional and not required for completing the workshop labs. It provides additional technical insights for those interested in production optimization and algorithm internals.")
+    
+    st.markdown("---")
     
     # Section 1: Query Analysis
     st.markdown("---")
