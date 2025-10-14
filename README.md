@@ -196,4 +196,4 @@ MIT-0 License. See [LICENSE](LICENSE) | Security: [CONTRIBUTING.md](CONTRIBUTING
 
 ---
 
-(c) 2025 Shayon Sanyal, Principal Solutions Architect, AWS
+**© 2025 Shayon Sanyal | AWS re:Invent 2025 | DAT409 Builder's Session**
