@@ -1404,8 +1404,8 @@ with tab1:
     
     # Quick action buttons with better layout
     st.markdown("**⚡ Quick Try:**")
-    quick_cols = st.columns(4)
-    quick_queries = ["wireless headphones", "security camera", "robot vacuum", "smart doorbell"]
+    quick_cols = st.columns(5)
+    quick_queries = ["wireless headphones", "security camera", "robot vacuum", "smart doorbell", "laptop"]
     for idx, q in enumerate(quick_queries):
         with quick_cols[idx]:
             if st.button(f"💡 {q}", key=f"quick_{idx}"):
@@ -1593,7 +1593,7 @@ with tab2:
            - Semantic search (70%): Vector similarity using Cohere embeddings
            - Keyword search (30%): PostgreSQL full-text search with ts_rank
         
-        2. **Cross-Table Join**:
+        2. **Multi-Table Query**:
            - Searches `knowledge_base` table (FAQs, tickets, notes, analytics)
            - Joins with `product_catalog` for related product information
         
@@ -1615,24 +1615,27 @@ with tab2:
             ("warranty", "✅ FAQ"),
             ("return policy", "✅ FAQ"),
             ("headphones", "✅ FAQ"),
+            ("setup guide", "✅ FAQ"),
             ("support ticket", "🔒 Restricted")
         ],
         'support_agent': [
             ("connectivity", "✅ Tickets"),
             ("firmware", "✅ Tickets"),
             ("maintenance", "✅ Internal"),
+            ("defect", "✅ Tickets"),
             ("analytics", "🔒 Restricted")
         ],
         'product_manager': [
             ("growth", "✅ Analytics"),
             ("sales", "✅ Analytics"),
             ("product launch", "✅ Internal"),
-            ("warranty", "✅ All")
+            ("warranty", "✅ All"),
+            ("revenue", "✅ Analytics")
         ]
     }
     
     mcp_quick_queries = mcp_quick_queries_by_persona.get(selected_persona, [])
-    mcp_quick_cols = st.columns(4)
+    mcp_quick_cols = st.columns(5)
     for idx, (q, status) in enumerate(mcp_quick_queries):
         with mcp_quick_cols[idx]:
             is_restricted = "🔒" in status
@@ -1978,6 +1981,86 @@ USING gin(
         - Fuzzy matching support
         - Typo tolerance
         """)
+    
+    # Reranking comparison
+    st.markdown("---")
+    st.markdown("## 🎯 Reranking: Cohere vs Reciprocal Rank Fusion (RRF)")
+    st.caption("Understanding different reranking strategies for hybrid search")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### Cohere Rerank (ML-Based)")
+        st.markdown("""
+        **Approach:**
+        - Uses transformer-based neural network
+        - Trained on query-document relevance pairs
+        - Understands semantic relationships
+        
+        **Pros:**
+        - ✅ Superior relevance accuracy
+        - ✅ Handles complex queries well
+        - ✅ Cross-lingual capabilities
+        - ✅ Continuous model improvements
+        
+        **Cons:**
+        - ❌ API latency (~50-200ms)
+        - ❌ Cost per request
+        - ❌ External dependency
+        
+        **Best For:**
+        - Production search applications
+        - User-facing search experiences
+        - When accuracy is critical
+        """)
+    
+    with col2:
+        st.markdown("### Reciprocal Rank Fusion (RRF)")
+        st.markdown("""
+        **Approach:**
+        - Mathematical formula: `score = Σ(1/(k + rank))`
+        - Combines rankings from multiple methods
+        - Pure PostgreSQL implementation
+        
+        **Pros:**
+        - ✅ Zero latency (in-database)
+        - ✅ No external dependencies
+        - ✅ No additional cost
+        - ✅ Deterministic results
+        
+        **Cons:**
+        - ❌ Less accurate than ML models
+        - ❌ Doesn't understand semantics
+        - ❌ Fixed algorithm (no learning)
+        
+        **Best For:**
+        - Cost-sensitive applications
+        - Low-latency requirements
+        - Internal tools/dashboards
+        """)
+    
+    st.markdown("### PostgreSQL RRF Implementation Example")
+    st.code("""
+-- Reciprocal Rank Fusion in PostgreSQL
+WITH semantic_results AS (
+    SELECT product_id, ROW_NUMBER() OVER (ORDER BY embedding <=> query_vector) as rank
+    FROM products
+),
+keyword_results AS (
+    SELECT product_id, ROW_NUMBER() OVER (ORDER BY ts_rank DESC) as rank
+    FROM products
+)
+SELECT 
+    COALESCE(s.product_id, k.product_id) as product_id,
+    (1.0 / (60 + COALESCE(s.rank, 1000))) + 
+    (1.0 / (60 + COALESCE(k.rank, 1000))) as rrf_score
+FROM semantic_results s
+FULL OUTER JOIN keyword_results k USING (product_id)
+ORDER BY rrf_score DESC
+LIMIT 10;
+""", language="sql")
+    
+    st.info("💡 **Recommendation:** Use Cohere Rerank for user-facing search (better accuracy), and RRF for internal tools or when latency/cost is a concern.")
     
     # Performance recommendations
     st.markdown("---")
