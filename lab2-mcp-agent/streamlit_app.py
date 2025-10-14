@@ -1149,8 +1149,8 @@ def render_product_card(product: Dict, show_score: bool = True):
 
 def render_knowledge_card(item: Dict, show_persona: bool = False):
     """Render a knowledge base card with enhanced styling"""
-    content_type = item.get('content_type', 'unknown')
-    severity = item.get('severity', 'low')
+    content_type = item.get('content_type', 'unknown') or 'unknown'
+    severity = item.get('severity', 'low') or 'low'
     
     severity_colors = {
         'low': '#10b981',
@@ -1178,7 +1178,7 @@ def render_knowledge_card(item: Dict, show_persona: bool = False):
     with col1:
         st.markdown(f"""
         <span class="method-badge" style="background: {severity_colors.get(severity, '#666')};">
-            {severity.upper()}
+            {(severity or 'low').upper()}
         </span>
         """, unsafe_allow_html=True)
     with col2:
@@ -1241,6 +1241,7 @@ with st.sidebar:
     
     # Persona selection with enhanced styling
     st.markdown("### 👤 Persona (RLS)")
+    st.caption("⚠️ Used in Tab 2 only")
     selected_persona = st.selectbox(
         "Select Role",
         options=list(PERSONAS.keys()),
@@ -1584,6 +1585,29 @@ with tab2:
         - 🔒 **Without Strands Agent**: Uses persona-specific database users - enforces RLS at database level
         """)
     
+    with st.expander("🔍 Search Strategy (Direct Search)", expanded=False):
+        st.markdown("""
+        **When NOT using Strands Agent, the search uses:**
+        
+        1. **Hybrid Search Approach**:
+           - Semantic search (70%): Vector similarity using Cohere embeddings
+           - Keyword search (30%): PostgreSQL full-text search with ts_rank
+        
+        2. **Cross-Table Join**:
+           - Searches `knowledge_base` table (FAQs, tickets, notes, analytics)
+           - Joins with `product_catalog` for related product information
+        
+        3. **RLS Filtering**:
+           - Automatically filters results based on your selected persona
+           - Uses persona-specific database credentials
+        
+        4. **Time Window** (if selected):
+           - Filters results by `created_at` timestamp
+           - Options: 24 hours, 7 days, 30 days, or all time
+        
+        **Note:** This demonstrates traditional database access patterns with RLS enforcement.
+        """)
+    
     # Quick queries
     st.markdown("**⚡ Quick Try:**")
     mcp_quick_queries_by_persona = {
@@ -1712,6 +1736,7 @@ with tab2:
                     st.error(f"Agent error: {str(e)}")
         else:
             # Direct MCP search
+            st.caption("💡 Using hybrid search (semantic + keyword) with RLS filtering. See 'Search Strategy' expander above for details.")
             with st.spinner(f"Searching as {selected_persona}..."):
                 try:
                     start_time = time.time()
