@@ -100,7 +100,7 @@ User Query → Strands Agent (Claude Sonnet 4) → MCP Client → Aurora Data AP
 ```bash
 cd /workshop/lab2-mcp-agent
 ./test_personas.sh  # Test customer, support, product manager personas
-streamlit run streamlit_app.py  # Optional demo UI
+streamlit run streamlit_app.py  # Demo UI
 ```
 
 **Learning Outcomes:**
