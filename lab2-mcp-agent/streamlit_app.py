@@ -1462,19 +1462,16 @@ with tab1:
         
         ---
         
-        **Understanding Weighted Score Fusion:**
+        **💡 Understanding Hybrid Search Approaches:**
         
-        The current implementation uses weighted score fusion without normalization:
-        - Semantic: 0.90 × 0.7 = 0.63
-        - Keyword: 0.05 × 0.3 = 0.015
-        - Combined: 0.645 (semantic dominates due to different score scales)
+        **Challenge:** Different search methods produce vastly different score ranges (semantic: 0.7-1.0, keyword: 0.01-0.1), causing one method to dominate weighted combinations.
         
-        **Production Solutions:**
-        1. ✅ **Cohere Rerank** (checkbox above) - ML model learns optimal relevance
-        2. ✅ **RRF** (see Tab 3) - Rank-based fusion, no normalization needed
-        3. ⚠️ **Min-Max normalization** - Normalize each method to 0-1 before fusion (not shown)
+        **Solutions Demonstrated:**
+        - ✅ **Hybrid (70/30)** - Weighted score fusion (simple but requires tuning)
+        - ✅ **Hybrid-RRF** (Tab 3) - Rank-based fusion (robust, no normalization needed) ✨
+        - ✅ **Cohere Rerank** (checkbox above) - ML-based re-ranking (most sophisticated)
         
-        **Try it:** Enable Cohere Rerank and see how results improve!
+        **Try it:** Enable Cohere Rerank or check out RRF in Tab 3!
         """)
     
     if search_button and search_query:
