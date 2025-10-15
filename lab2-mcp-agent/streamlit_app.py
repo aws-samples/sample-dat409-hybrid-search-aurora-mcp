@@ -1459,6 +1459,22 @@ with tab1:
         - Use **Keyword** for exact term matching
         - Use **Fuzzy** for typo-tolerant searches
         - Use **Hybrid** for balanced results
+        
+        ---
+        
+        **Understanding Weighted Score Fusion:**
+        
+        The current implementation uses weighted score fusion without normalization:
+        - Semantic: 0.90 × 0.7 = 0.63
+        - Keyword: 0.05 × 0.3 = 0.015
+        - Combined: 0.645 (semantic dominates due to different score scales)
+        
+        **Production Solutions:**
+        1. ✅ **Cohere Rerank** (checkbox above) - ML model learns optimal relevance
+        2. ✅ **RRF** (see Tab 3) - Rank-based fusion, no normalization needed
+        3. ⚠️ **Min-Max normalization** - Normalize each method to 0-1 before fusion (not shown)
+        
+        **Try it:** Enable Cohere Rerank and see how results improve!
         """)
     
     if search_button and search_query:
@@ -1799,6 +1815,85 @@ with tab3:
     
     st.markdown("---")
     
+    # Section 0: Reranking comparison (moved to top)
+    st.markdown("## 🎯 Reranking: Cohere vs Reciprocal Rank Fusion (RRF)")
+    st.caption("Understanding different reranking strategies for hybrid search")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### Cohere Rerank (ML-Based)")
+        st.markdown("""
+        **Approach:**
+        - Uses transformer-based neural network
+        - Trained on query-document relevance pairs
+        - Understands semantic relationships
+        
+        **Pros:**
+        - ✅ Superior relevance accuracy
+        - ✅ Handles complex queries well
+        - ✅ Cross-lingual capabilities
+        - ✅ Continuous model improvements
+        
+        **Cons:**
+        - ❌ API latency (~50-200ms)
+        - ❌ Cost per request
+        - ❌ External dependency
+        
+        **Best For:**
+        - Production search applications
+        - User-facing search experiences
+        - When accuracy is critical
+        """)
+    
+    with col2:
+        st.markdown("### Reciprocal Rank Fusion (RRF)")
+        st.markdown("""
+        **Approach:**
+        - Mathematical formula: `score = Σ(1/(k + rank))`
+        - Combines rankings from multiple methods
+        - Pure PostgreSQL implementation
+        
+        **Pros:**
+        - ✅ Zero latency (in-database)
+        - ✅ No external dependencies
+        - ✅ No additional cost
+        - ✅ Deterministic results
+        
+        **Cons:**
+        - ❌ Less accurate than ML models
+        - ❌ Doesn't understand semantics
+        - ❌ Fixed algorithm (no learning)
+        
+        **Best For:**
+        - Cost-sensitive applications
+        - Low-latency requirements
+        - Internal tools/dashboards
+        """)
+    
+    st.markdown("### PostgreSQL RRF Implementation Example")
+    st.code("""
+-- Reciprocal Rank Fusion in PostgreSQL
+WITH semantic_results AS (
+    SELECT product_id, ROW_NUMBER() OVER (ORDER BY embedding <=> query_vector) as rank
+    FROM products
+),
+keyword_results AS (
+    SELECT product_id, ROW_NUMBER() OVER (ORDER BY ts_rank DESC) as rank
+    FROM products
+)
+SELECT 
+    COALESCE(s.product_id, k.product_id) as product_id,
+    (1.0 / (60 + COALESCE(s.rank, 1000))) + 
+    (1.0 / (60 + COALESCE(k.rank, 1000))) as rrf_score
+FROM semantic_results s
+FULL OUTER JOIN keyword_results k USING (product_id)
+ORDER BY rrf_score DESC
+LIMIT 10;
+""", language="sql")
+    
+    st.info("💡 **Recommendation:** Use Cohere Rerank for user-facing search (better accuracy), and RRF for internal tools or when latency/cost is a concern.")
+    
     # Section 1: Query Analysis
     st.markdown("---")
     st.markdown("## 🧠 Query Analysis")
@@ -1983,86 +2078,6 @@ USING gin(
         - Fuzzy matching support
         - Typo tolerance
         """)
-    
-    # Reranking comparison
-    st.markdown("---")
-    st.markdown("## 🎯 Reranking: Cohere vs Reciprocal Rank Fusion (RRF)")
-    st.caption("Understanding different reranking strategies for hybrid search")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### Cohere Rerank (ML-Based)")
-        st.markdown("""
-        **Approach:**
-        - Uses transformer-based neural network
-        - Trained on query-document relevance pairs
-        - Understands semantic relationships
-        
-        **Pros:**
-        - ✅ Superior relevance accuracy
-        - ✅ Handles complex queries well
-        - ✅ Cross-lingual capabilities
-        - ✅ Continuous model improvements
-        
-        **Cons:**
-        - ❌ API latency (~50-200ms)
-        - ❌ Cost per request
-        - ❌ External dependency
-        
-        **Best For:**
-        - Production search applications
-        - User-facing search experiences
-        - When accuracy is critical
-        """)
-    
-    with col2:
-        st.markdown("### Reciprocal Rank Fusion (RRF)")
-        st.markdown("""
-        **Approach:**
-        - Mathematical formula: `score = Σ(1/(k + rank))`
-        - Combines rankings from multiple methods
-        - Pure PostgreSQL implementation
-        
-        **Pros:**
-        - ✅ Zero latency (in-database)
-        - ✅ No external dependencies
-        - ✅ No additional cost
-        - ✅ Deterministic results
-        
-        **Cons:**
-        - ❌ Less accurate than ML models
-        - ❌ Doesn't understand semantics
-        - ❌ Fixed algorithm (no learning)
-        
-        **Best For:**
-        - Cost-sensitive applications
-        - Low-latency requirements
-        - Internal tools/dashboards
-        """)
-    
-    st.markdown("### PostgreSQL RRF Implementation Example")
-    st.code("""
--- Reciprocal Rank Fusion in PostgreSQL
-WITH semantic_results AS (
-    SELECT product_id, ROW_NUMBER() OVER (ORDER BY embedding <=> query_vector) as rank
-    FROM products
-),
-keyword_results AS (
-    SELECT product_id, ROW_NUMBER() OVER (ORDER BY ts_rank DESC) as rank
-    FROM products
-)
-SELECT 
-    COALESCE(s.product_id, k.product_id) as product_id,
-    (1.0 / (60 + COALESCE(s.rank, 1000))) + 
-    (1.0 / (60 + COALESCE(k.rank, 1000))) as rrf_score
-FROM semantic_results s
-FULL OUTER JOIN keyword_results k USING (product_id)
-ORDER BY rrf_score DESC
-LIMIT 10;
-""", language="sql")
-    
-    st.info("💡 **Recommendation:** Use Cohere Rerank for user-facing search (better accuracy), and RRF for internal tools or when latency/cost is a concern.")
     
     # Performance recommendations
     st.markdown("---")
