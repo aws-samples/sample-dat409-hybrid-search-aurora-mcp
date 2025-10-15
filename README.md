@@ -60,7 +60,7 @@ Build a multi-modal retrieval system combining three complementary search techni
 
 **Key Concepts:**
 - Parallel embedding generation (10 workers) with `pandarallel` for 5-8 minute batch processing
-- Reciprocal Rank Fusion (RRF) for combining heterogeneous ranking signals
+- Cohere Rerank for combining heterogeneous ranking signals from multiple search methods into a unified relevance score
 - Index tuning: HNSW vs IVFFlat trade-offs, GIN vs GiST for text search
 - Distance metrics: L2 (`<->`) vs cosine (`<=>`) vs inner product (`<#>`)
 
