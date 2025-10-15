@@ -70,8 +70,8 @@ cd /workshop/lab1-hybrid-search/notebook
 ```
 
 **Learning Outcomes:**
-- Understand when semantic vs lexical search excels (conceptual vs exact match)
-- Implement production-grade index strategies for million-scale vector workloads
+- Understand when semantic vs keyword search excels (conceptual vs exact match)
+- Implement enterprise-grade index strategies for large scale vector workloads
 - Optimize query latency through index parameter tuning and result fusion
 
 ---
