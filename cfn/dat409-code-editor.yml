@@ -73,6 +73,16 @@ Parameters:
     Type: String
     Default: workshop_db
     Description: Database name
+  
+  PythonVersion:
+    Type: String
+    Default: "3.13"
+    Description: Python version
+
+  PostgreSQLVersion:
+    Type: String
+    Default: "17.5"
+    Description: PostgreSQL version
 
 Conditions:
   IsGraviton: !Or
