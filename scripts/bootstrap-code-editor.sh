@@ -523,25 +523,29 @@ INSTRUCTIONS_EOF
 
 chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/ENABLE_BEDROCK_FIRST.md"
 
-# Download setup-database.sh script from GitHub
-log "Downloading setup-database.sh script..."
-curl -fsSL "https://raw.githubusercontent.com/aws-samples/sample-dat409-hybrid-search-aurora-mcp/main/scripts/setup-database.sh" \
-    -o "$HOME_FOLDER/setup-database.sh"
+# Setup scripts are already in the cloned repository
+log "Configuring workshop scripts..."
 
-if [ -f "$HOME_FOLDER/setup-database.sh" ]; then
-    chmod +x "$HOME_FOLDER/setup-database.sh"
-    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/setup-database.sh"
-    log "✅ setup-database.sh downloaded successfully"
+# Make scripts executable
+if [ -f "$HOME_FOLDER/scripts/setup-database.sh" ]; then
+    chmod +x "$HOME_FOLDER/scripts/setup-database.sh"
+    log "✅ setup-database.sh ready"
 else
-    warn "Failed to download setup-database.sh - creating placeholder"
-    cat > "$HOME_FOLDER/setup-database.sh" << 'PLACEHOLDER_EOF'
-#!/bin/bash
-echo "❌ ERROR: Database setup script not available!"
-echo "Please check GitHub repository for the latest version."
-exit 1
-PLACEHOLDER_EOF
-    chmod +x "$HOME_FOLDER/setup-database.sh"
-    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/setup-database.sh"
+    warn "setup-database.sh not found in repository"
+fi
+
+if [ -f "$HOME_FOLDER/scripts/verify-setup.sh" ]; then
+    chmod +x "$HOME_FOLDER/scripts/verify-setup.sh"
+    log "✅ verify-setup.sh ready"
+fi
+
+# Create convenience symlinks in /workshop root
+if [ -f "$HOME_FOLDER/scripts/setup-database.sh" ]; then
+    ln -sf "$HOME_FOLDER/scripts/setup-database.sh" "$HOME_FOLDER/setup-database.sh"
+fi
+
+if [ -f "$HOME_FOLDER/scripts/verify-setup.sh" ]; then
+    ln -sf "$HOME_FOLDER/scripts/verify-setup.sh" "$HOME_FOLDER/verify-setup.sh"
 fi
 
 # ===========================================================================
@@ -576,15 +580,26 @@ while [ $DB_WAIT_COUNT -lt $MAX_DB_WAIT ]; do
 done
 
 # Run database setup if database is available
-if [ $DB_WAIT_COUNT -lt $MAX_DB_WAIT ] && [ -f "$HOME_FOLDER/setup-database.sh" ]; then
+if [ $DB_WAIT_COUNT -lt $MAX_DB_WAIT ] && [ -f "$HOME_FOLDER/scripts/setup-database.sh" ]; then
     log "Running automated database setup..."
     log "This will take 6-9 minutes to load 21,704 products with embeddings"
+    
+    # First, ensure pgvector extension is available
+    log "Checking pgvector extension availability..."
+    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+        -c "CREATE EXTENSION IF NOT EXISTS vector;" &>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        log "✅ pgvector extension is available"
+    else
+        warn "pgvector extension not available - database setup may fail"
+    fi
     
     # Run as participant user with environment variables
     sudo -u "$CODE_EDITOR_USER" bash -c "
         source /workshop/.env
         cd /workshop
-        bash /workshop/setup-database.sh 2>&1 | tee /workshop/database-setup.log
+        bash /workshop/scripts/setup-database.sh 2>&1 | tee /workshop/database-setup.log
     "
     
     if [ $? -eq 0 ]; then
@@ -593,11 +608,11 @@ if [ $DB_WAIT_COUNT -lt $MAX_DB_WAIT ] && [ -f "$HOME_FOLDER/setup-database.sh" 
     else
         warn "Database setup encountered issues"
         warn "Check /workshop/database-setup.log for details"
-        warn "You can re-run: /workshop/setup-database.sh"
+        warn "You can re-run: /workshop/scripts/setup-database.sh"
     fi
 else
     warn "Skipping automated database setup"
-    warn "Run manually: /workshop/setup-database.sh"
+    warn "Run manually: /workshop/scripts/setup-database.sh"
 fi
 
 log "==================== Bootstrap Summary ===================="
