@@ -431,189 +431,12 @@ log "==================== End Database Configuration Section ===================
 # MCP CONFIGURATION FOR LAB 2
 # ===========================================================================
 
-log "Creating MCP configuration file..."
+# MCP configuration will be created after repository is cloned
+# The lab2-mcp-agent directory doesn't exist yet during bootstrap
+log "MCP configuration will be set up after repository clone"
 
-LAB2_DIR="$HOME_FOLDER/lab2-mcp-agent"
-
-# Build cluster ARN if not provided
-if [ -z "$DB_CLUSTER_ARN" ] && [ ! -z "$DB_HOST" ]; then
-    CLUSTER_ID=$(echo "$DB_HOST" | cut -d'.' -f1)
-    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "123456789012")
-    DB_CLUSTER_ARN="arn:aws:rds:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster:${CLUSTER_ID}"
-fi
-
-# Use actual values or placeholders
-CLUSTER_ARN="${DB_CLUSTER_ARN:-[your-cluster-arn]}"
-SECRET_ARN="${DB_SECRET_ARN:-[your-secret-arn]}"
-
-# Create the config file
-cat > "${LAB2_DIR}/mcp_config.json" << EOF
-{
-  "mcpServers": {
-    "awslabs.postgres-mcp-server": {
-      "command": "uvx",
-      "args": [
-        "awslabs.postgres-mcp-server@latest",
-        "--resource_arn", "${CLUSTER_ARN}",
-        "--secret_arn", "${SECRET_ARN}",
-        "--database", "workshop_db",
-        "--region", "us-west-2",
-        "--readonly", "True"
-      ],
-      "env": {
-        "AWS_PROFILE": "default",
-        "AWS_REGION": "us-west-2",
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      }
-    }
-  }
-}
-EOF
-
-chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "${LAB2_DIR}/mcp_config.json"
-log "✅ MCP config: ${LAB2_DIR}/mcp_config.json"
-
-# ===========================================================================
-# CREATE HELPER SCRIPTS FOR PARTICIPANTS
-# ===========================================================================
-
-log "Creating helper scripts for participants..."
-
-# Create instructions for enabling Bedrock
-cat > "$HOME_FOLDER/ENABLE_BEDROCK_FIRST.md" << 'INSTRUCTIONS_EOF'
-# DAT409 Workshop Setup Instructions
-
-## Step 1: Enable Bedrock Models (Required)
-
-1. Open AWS Console: https://console.aws.amazon.com/bedrock
-2. Go to "Model access" (left sidebar)
-3. Click "Modify model access"
-4. Enable these models:
-   - **Cohere**: Embed English v3 (REQUIRED)
-   - **Amazon**: Titan Text Embeddings V2 (backup)
-5. Click "Next" → "Submit"
-6. Wait for status to show "Access granted" (~30 seconds)
-
-## Step 2: Run Database Setup
-
-After enabling Bedrock, instructors will run:
-```bash
-cd /workshop
-./setup-database.sh
-```
-
-This will:
-- Create all database tables
-- Load 21,704 products with embeddings
-- Set up Lab 2 RLS and knowledge base
-- Take approximately 3 minutes
-
-## Quick Verification
-
-Test Bedrock access:
-```bash
-aws bedrock-runtime list-foundation-models --region us-west-2
-```
-
-Test database connection:
-```bash
-psql -c "SELECT version();"
-```
-INSTRUCTIONS_EOF
-
-chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/ENABLE_BEDROCK_FIRST.md"
-
-# Setup scripts are already in the cloned repository
-log "Configuring workshop scripts..."
-
-# Make scripts executable
-if [ -f "$HOME_FOLDER/scripts/setup-database.sh" ]; then
-    chmod +x "$HOME_FOLDER/scripts/setup-database.sh"
-    log "✅ setup-database.sh ready"
-else
-    warn "setup-database.sh not found in repository"
-fi
-
-if [ -f "$HOME_FOLDER/scripts/verify-setup.sh" ]; then
-    chmod +x "$HOME_FOLDER/scripts/verify-setup.sh"
-    log "✅ verify-setup.sh ready"
-fi
-
-# Create convenience symlinks in /workshop root
-if [ -f "$HOME_FOLDER/scripts/setup-database.sh" ]; then
-    ln -sf "$HOME_FOLDER/scripts/setup-database.sh" "$HOME_FOLDER/setup-database.sh"
-fi
-
-if [ -f "$HOME_FOLDER/scripts/verify-setup.sh" ]; then
-    ln -sf "$HOME_FOLDER/scripts/verify-setup.sh" "$HOME_FOLDER/verify-setup.sh"
-fi
-
-# ===========================================================================
-# AUTOMATED DATABASE SETUP
-# ===========================================================================
-
-log "==================== Starting Automated Database Setup ===================="
-
-# Wait for Aurora cluster to be fully available
-log "Waiting for Aurora cluster to be available..."
-MAX_DB_WAIT=60  # 60 * 10 seconds = 10 minutes
-DB_WAIT_COUNT=0
-
-while [ $DB_WAIT_COUNT -lt $MAX_DB_WAIT ]; do
-    if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_PASSWORD" ]; then
-        if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
-            -c "SELECT 1;" &>/dev/null; then
-            log "✅ Database is available and accepting connections"
-            break
-        fi
-    fi
-    
-    DB_WAIT_COUNT=$((DB_WAIT_COUNT + 1))
-    if [ $DB_WAIT_COUNT -eq $MAX_DB_WAIT ]; then
-        warn "Database not available after 10 minutes - skipping automated setup"
-        warn "Run /workshop/setup-database.sh manually when database is ready"
-        break
-    fi
-    
-    log "Waiting for database... (attempt $DB_WAIT_COUNT/$MAX_DB_WAIT)"
-    sleep 10
-done
-
-# Run database setup if database is available
-if [ $DB_WAIT_COUNT -lt $MAX_DB_WAIT ] && [ -f "$HOME_FOLDER/scripts/setup-database.sh" ]; then
-    log "Running automated database setup..."
-    log "This will take 6-9 minutes to load 21,704 products with embeddings"
-    
-    # First, ensure pgvector extension is available
-    log "Checking pgvector extension availability..."
-    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
-        -c "CREATE EXTENSION IF NOT EXISTS vector;" &>/dev/null
-    
-    if [ $? -eq 0 ]; then
-        log "✅ pgvector extension is available"
-    else
-        warn "pgvector extension not available - database setup may fail"
-    fi
-    
-    # Run as participant user with environment variables
-    sudo -u "$CODE_EDITOR_USER" bash -c "
-        source /workshop/.env
-        cd /workshop
-        bash /workshop/scripts/setup-database.sh 2>&1 | tee /workshop/database-setup.log
-    "
-    
-    if [ $? -eq 0 ]; then
-        log "✅ Database setup completed successfully!"
-        log "Check /workshop/database-setup.log for details"
-    else
-        warn "Database setup encountered issues"
-        warn "Check /workshop/database-setup.log for details"
-        warn "You can re-run: /workshop/scripts/setup-database.sh"
-    fi
-else
-    warn "Skipping automated database setup"
-    warn "Run manually: /workshop/scripts/setup-database.sh"
-fi
+# Note: Workshop repository will be cloned by CloudFormation after this script
+# Scripts will be available in /workshop/scripts/ after clone completes
 
 log "==================== Bootstrap Summary ===================="
 echo "✅ INFRASTRUCTURE SETUP COMPLETE"
@@ -622,11 +445,9 @@ echo "Services Running:"
 echo "  Nginx: $(systemctl is-active nginx)"
 echo "  Code Editor: $(systemctl is-active code-editor@$CODE_EDITOR_USER)"
 echo ""
-if [ -f "/workshop/database-setup.log" ]; then
-    echo "Database Setup:"
-    echo "  Status: Check /workshop/database-setup.log"
-    echo "  Products: $(grep -o 'Products loaded: [0-9,]*' /workshop/database-setup.log 2>/dev/null || echo 'Check log')"
-    echo ""
-fi
+echo "Next Steps (after repository clone):"
+echo "  1. Run: cd /workshop && bash scripts/setup-database.sh"
+echo "  2. This will load 21,704 products with embeddings (6-9 min)"
+echo ""
 echo "Access Code Editor via CloudFront with token: $CODE_EDITOR_PASSWORD"
 log "============================================================"
