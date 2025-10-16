@@ -36,8 +36,7 @@
       "Resource": [
         "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4*",
         "arn:aws:bedrock:*::foundation-model/cohere.embed-english-v3",
-        "arn:aws:bedrock:*::foundation-model/cohere.rerank-v3-5:0",
-        "arn:aws:bedrock:*:*:provisioned-model/prod-4pmewlybdftbs"
+        "arn:aws:bedrock:*::foundation-model/cohere.rerank-v3-5:0"
       ]
     },
     {
