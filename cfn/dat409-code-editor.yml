@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'DAT409 - Code Editor with GitHub Bootstrap Script'
+Description: 'DAT409 - Code Editor with Automated Database Setup'
 
 Parameters:
   TemplateName:
@@ -260,7 +260,7 @@ Resources:
       Roles:
         - !Ref CodeEditorRole
 
-  # CloudWatch Log Groups for better debugging
+  # CloudWatch Log Groups
   BootstrapLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -273,14 +273,14 @@ Resources:
       LogGroupName: !Sub '/aws/ssm/${TemplateName}-bootstrap'
       RetentionInDays: 7
 
-  # Simplified SSM Document that just calls GitHub script
+  # SSM Document with Automated Database Setup
   CodeEditorSSMDoc:
     Type: AWS::SSM::Document
     Properties:
       DocumentType: Command
       Content:
         schemaVersion: '2.2'
-        description: DAT409 Code Editor Bootstrap - GitHub Script Approach
+        description: DAT409 Code Editor Bootstrap with Automated Database Setup
         parameters:
           CodeEditorPassword:
             type: String
@@ -322,67 +322,39 @@ Resources:
                 - 'set -euo pipefail'
                 - !Sub |
                   echo "Setting up environment variables..."
-                  
-                  # Update system first
                   dnf update -y
-                  
-                  # Setup environment for the participant user
                   export AWS_REGION="${AWS::Region}"
                   export AWS_DEFAULT_REGION="${AWS::Region}"
                   export AWS_ACCOUNTID="${AWS::AccountId}"
-                  
                   echo "Environment setup completed"
 
           - name: RunGitHubBootstrap
             action: aws:runShellScript
             inputs:
-              timeoutSeconds: 900
+              timeoutSeconds: 1200
               runCommand:
                 - '#!/bin/bash'
                 - 'set -euo pipefail'
                 - !Sub |
-                  echo "=== DAT409 GitHub Bootstrap Script Execution ==="
-                  echo "Bootstrap URL: {{ BootstrapScriptUrl }}"
-                  echo "Password: {{ CodeEditorPassword:0:4 }}****"
-                  echo "DB Secret ARN: {{ DBSecretArn }}"
-                  echo "DB Cluster: {{ DBClusterEndpoint }}"
+                  echo "=== DAT409 Bootstrap (Infrastructure Only) ==="
                   echo "Timestamp: $(date)"
-                  echo
                   
-                  # Set environment variables for the bootstrap script
                   export DB_SECRET_ARN="{{ DBSecretArn }}"
                   export DB_CLUSTER_ENDPOINT="{{ DBClusterEndpoint }}"
                   export DB_CLUSTER_ARN="{{ DBClusterArn }}"
                   export DB_NAME="{{ DBName }}"
                   export AWS_REGION="${AWS::Region}"
-                  export AWS_DEFAULT_REGION="${AWS::Region}"
                   
-                  # Download the bootstrap script
-                  echo "Downloading bootstrap script..."
                   curl -fsSL "{{ BootstrapScriptUrl }}" -o /tmp/bootstrap-code-editor.sh
                   
-                  # Verify download
                   if [ ! -f /tmp/bootstrap-code-editor.sh ]; then
                     echo "ERROR: Failed to download bootstrap script"
                     exit 1
                   fi
                   
-                  # Make executable
                   chmod +x /tmp/bootstrap-code-editor.sh
                   
-                  echo "Script downloaded successfully ($(wc -l < /tmp/bootstrap-code-editor.sh) lines)"
-                  echo
-                  
-                  # Execute the bootstrap script with environment variables
-                  echo "Executing bootstrap script (infrastructure only)..."
-                  echo "This will take approximately 3-5 minutes:"
-                  echo "  - Code Editor setup: ~2-3 minutes"
-                  echo "  - Service validation: ~1 minute"
-                  echo ""
-                  echo "NOTE: Database setup will be done separately by instructors"
-                  echo
-                  
-                  # Pass environment variables to the bootstrap script
+                  echo "Executing infrastructure bootstrap (no database setup yet)..."
                   DB_SECRET_ARN="{{ DBSecretArn }}" \
                   DB_CLUSTER_ENDPOINT="{{ DBClusterEndpoint }}" \
                   DB_CLUSTER_ARN="{{ DBClusterArn }}" \
@@ -390,98 +362,14 @@ Resources:
                   AWS_REGION="${AWS::Region}" \
                   /tmp/bootstrap-code-editor.sh "{{ CodeEditorPassword }}"
                   
-                  # Check execution result
                   if [ $? -eq 0 ]; then
-                    echo
-                    echo "=== BOOTSTRAP SUCCESS ==="
-                    echo "Code Editor is now accessible"
-                    echo "Infrastructure ready - run setup-database.sh after enabling Bedrock"
-                    echo "Services status:"
-                    systemctl is-active nginx || echo "Nginx: FAILED"
-                    systemctl is-active code-editor@participant || echo "Code Editor: FAILED"
-                    
-                    # Show database loading summary if log exists
-                    if [ -f /workshop/data_loader.log ]; then
-                      echo
-                      echo "Database Loading Summary:"
-                      tail -n 20 /workshop/data_loader.log | grep -E "(✅|Total|products|embeddings|time)" || true
-                    fi
+                    echo "✅ Infrastructure bootstrap completed"
                   else
-                    echo "ERROR: Bootstrap script failed"
+                    echo "❌ Bootstrap failed"
                     exit 1
                   fi
                   
-                  # Clean up
                   rm -f /tmp/bootstrap-code-editor.sh
-                  
-                  echo "Bootstrap execution completed successfully"
-
-          - name: CreateCodeEditorSettings
-            action: aws:runShellScript
-            inputs:
-              timeoutSeconds: 300
-              runCommand:
-                - '#!/bin/bash'
-                - !Sub |
-                  echo "Configuring Code Editor settings..."
-                  
-                  # Create settings directory
-                  sudo -u ${CodeEditorUser} --login mkdir -p /home/${CodeEditorUser}/.code-editor-server/data/User
-                  
-                  # Create VS Code settings with Git completely disabled
-                  tee /home/${CodeEditorUser}/.code-editor-server/data/User/settings.json <<'EOF'
-                  {
-                    "workbench.colorTheme": "Default Dark Modern",
-                    "git.enabled": false,
-                    "git.decorations.enabled": false,
-                    "git.showProgress": false,
-                    "git.autofetch": false,
-                    "scm.diffDecorations": "none",
-                    "scm.defaultViewMode": "tree",
-                    "aws.telemetry": false,
-                    "extensions.autoUpdate": false,
-                    "extensions.autoCheckUpdates": false,
-                    "telemetry.telemetryLevel": "off",
-                    "security.workspace.trust.startupPrompt": "never",
-                    "security.workspace.trust.enabled": false,
-                    "security.workspace.trust.banner": "never",
-                    "security.workspace.trust.emptyWindow": false,
-                    "workbench.startupEditor": "none",
-                    "terminal.integrated.cwd": "{{ HomeFolder }}",
-                    "terminal.integrated.defaultProfile.linux": "bash",
-                    "python.defaultInterpreterPath": "/usr/bin/python3.13",
-                    "python.terminal.activateEnvironment": true,
-                    "python.linting.enabled": true,
-                    "jupyter.jupyterServerType": "local",
-                    "jupyter.notebookFileRoot": "{{ HomeFolder }}",
-                    "notebook.defaultKernel": "python3",
-                    "files.autoSave": "afterDelay",
-                    "files.autoSaveDelay": 1000
-                  }
-                  EOF
-                  
-                  # Set ownership
-                  chown ${CodeEditorUser}:${CodeEditorUser} /home/${CodeEditorUser}/.code-editor-server/data/User/settings.json
-                  
-                  # Create .gitignore for workshop files
-                  cat > {{ HomeFolder }}/.gitignore <<'GITIGNORE'
-                  # Workshop generated files
-                  *.log
-                  *.pyc
-                  __pycache__/
-                  .env
-                  .pgpass
-                  run_data_loader.py
-                  test_db_connection.sh
-                  debug_secret.sh
-                  fix_setup.sh
-                  data_loader.log
-                  verify_environment.sh
-                  GITIGNORE
-                  
-                  chown ${CodeEditorUser}:${CodeEditorUser} {{ HomeFolder }}/.gitignore
-                  
-                  echo "Code Editor settings configured with Git disabled"
 
           - name: CloneWorkshopRepository
             action: aws:runShellScript
@@ -492,21 +380,21 @@ Resources:
                 - !Sub |
                   if [ -n "{{ RepoUrl }}" ]; then
                     echo "Cloning workshop repository..."
-                    
-                    # Clone as the participant user to avoid permission issues
                     sudo -u participant git clone "{{ RepoUrl }}" /tmp/workshop_repo
                     
-                    # Copy contents to workshop directory, preserving permissions
                     if [ -d /tmp/workshop_repo ]; then
                       sudo -u participant cp -r /tmp/workshop_repo/* "{{ HomeFolder }}/" || true
                       sudo -u participant cp -r /tmp/workshop_repo/.[!.]* "{{ HomeFolder }}/" 2>/dev/null || true
                       rm -rf /tmp/workshop_repo
-                      echo "Repository cloned successfully"
+                      
+                      # Make setup scripts executable
+                      chmod +x "{{ HomeFolder }}/scripts/setup-database.sh" 2>/dev/null || true
+                      chmod +x "{{ HomeFolder }}/scripts/verify-setup.sh" 2>/dev/null || true
+                      
+                      echo "✅ Repository cloned successfully"
                     else
-                      echo "WARNING: Repository clone failed, continuing without repo"
+                      echo "WARNING: Repository clone failed"
                     fi
-                  else
-                    echo "No repository URL provided, skipping clone"
                   fi
 
           - name: SetupWorkshopEnvironment
@@ -518,9 +406,8 @@ Resources:
                 - !Sub |
                   echo "Setting up workshop environment..."
                   
-                  # Retrieve database credentials from Secrets Manager
-                  if [ ! -z "{{ DBSecretArn }}" ] && [ "{{ DBSecretArn }}" != "none" ]; then
-                    echo "Retrieving database credentials..."
+                  # Retrieve database credentials
+                  if [ ! -z "{{ DBSecretArn }}" ]; then
                     DB_SECRET=$(aws secretsmanager get-secret-value \
                       --secret-id "{{ DBSecretArn }}" \
                       --region ${AWS::Region} \
@@ -534,28 +421,13 @@ Resources:
                       DB_USER=$(echo "$DB_SECRET" | jq -r '.username // .user // empty')
                       DB_PASSWORD=$(echo "$DB_SECRET" | jq -r '.password // empty')
                       
-                      # Fallback to cluster endpoint if host is empty
-                      if [ -z "$DB_HOST" ] || [ "$DB_HOST" == "null" ]; then
+                      if [ -z "$DB_HOST" ]; then
                         DB_HOST="{{ DBClusterEndpoint }}"
                       fi
-                    else
-                      echo "WARNING: Could not retrieve database secret"
-                      DB_HOST="{{ DBClusterEndpoint }}"
-                      DB_PORT="5432"
-                      DB_NAME="{{ DBName }}"
-                      DB_USER="workshop_admin"
-                      DB_PASSWORD=""
                     fi
-                  else
-                    echo "WARNING: No DBSecretArn provided"
-                    DB_HOST="{{ DBClusterEndpoint }}"
-                    DB_PORT="5432"
-                    DB_NAME="{{ DBName }}"
-                    DB_USER="workshop_admin"
-                    DB_PASSWORD=""
                   fi
                   
-                  # Create .env file for workshop with actual credentials
+                  # Create .env file
                   sudo -u participant tee "{{ HomeFolder }}/.env" << EOF
                   DB_HOST=$DB_HOST
                   DB_PORT=$DB_PORT
@@ -566,8 +438,6 @@ Resources:
                   DATABASE_SECRET_ARN={{ DBSecretArn }}
                   DATABASE_CLUSTER_ARN={{ DBClusterArn }}
                   AWS_REGION=${AWS::Region}
-                  
-                  # PostgreSQL Client Environment Variables
                   PGHOST=$DB_HOST
                   PGPORT=$DB_PORT
                   PGDATABASE=$DB_NAME
@@ -578,7 +448,7 @@ Resources:
                   chmod 600 "{{ HomeFolder }}/.env"
                   chown participant:participant "{{ HomeFolder }}/.env"
                   
-                  # Also create .pgpass file for passwordless psql access
+                  # Create .pgpass
                   sudo -u participant bash -c "cat > /home/participant/.pgpass << PGPASS_EOF
                   $DB_HOST:$DB_PORT:$DB_NAME:$DB_USER:$DB_PASSWORD
                   $DB_HOST:$DB_PORT:*:$DB_USER:$DB_PASSWORD
@@ -588,56 +458,99 @@ Resources:
                   chmod 600 "/home/participant/.pgpass"
                   chown participant:participant "/home/participant/.pgpass"
                   
-                  # Setup bash environment with database credentials
+                  # Update bashrc
                   cat >> /home/participant/.bashrc << BASHRC_EOF
                   export AWS_REGION="${AWS::Region}"
-                  export AWS_DEFAULT_REGION="${AWS::Region}"
-                  export PATH=\$PATH:/home/participant/.local/bin:/usr/local/bin
+                  export PATH=\$PATH:/home/participant/.local/bin
                   
-                  # Workshop shortcuts
                   alias workshop="cd {{ HomeFolder }}"
                   alias lab1="cd {{ HomeFolder }}/lab1-hybrid-search"
                   alias lab2="cd {{ HomeFolder }}/lab2-mcp-agent"
                   
-                  # Database connection environment - Static values from .env
                   export DB_HOST='$DB_HOST'
                   export DB_PORT='$DB_PORT'
                   export DB_NAME='$DB_NAME'
                   export DB_USER='$DB_USER'
                   export DB_PASSWORD='$DB_PASSWORD'
-                  export DATABASE_URL='postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME'
                   export PGHOST='$DB_HOST'
                   export PGPORT='$DB_PORT'
                   export PGUSER='$DB_USER'
                   export PGPASSWORD='$DB_PASSWORD'
                   export PGDATABASE='$DB_NAME'
-                  export DB_SECRET_ARN='{{ DBSecretArn }}'
-                  export DATABASE_CLUSTER_ARN='{{ DBClusterArn }}'
                   
-                  # Load .env file if it exists (as backup)
                   if [ -f {{ HomeFolder }}/.env ]; then
                     set -a
                     source {{ HomeFolder }}/.env 2>/dev/null || true
                     set +a
                   fi
                   
-                  echo ""
-                  echo "🔘 DAT409 Workshop Environment Ready!"
-                  echo "📊 Database: \$PGDATABASE @ \$PGHOST"
-                  echo "🔧 Quick commands: psql, workshop, lab1, lab2"
-                  echo "💡 Test connection: psql -c 'SELECT version();'"
-                  echo ""
+                  echo "📘 DAT409 Workshop Ready!"
+                  echo "🔧 Commands: psql, workshop, lab1, lab2"
                   BASHRC_EOF
                   
-                  chown participant:participant /home/participant/.bashrc
                   chown -R participant:participant "{{ HomeFolder }}"
+
+          - name: RunAutomatedDatabaseSetup
+            action: aws:runShellScript
+            inputs:
+              timeoutSeconds: 1800
+              runCommand:
+                - '#!/bin/bash'
+                - !Sub |
+                  echo "=========================================="
+                  echo "AUTOMATED DATABASE SETUP"
+                  echo "=========================================="
+                  echo "Timestamp: $(date)"
                   
-                  echo "Workshop environment setup completed"
-                  echo "Database credentials configured:"
-                  echo "  Host: $DB_HOST"
-                  echo "  Database: $DB_NAME"
-                  echo "  User: $DB_USER"
-                  echo "  Password: $([ ! -z "$DB_PASSWORD" ] && echo 'Set' || echo 'Not set')"
+                  # Check if setup script exists
+                  if [ ! -f "{{ HomeFolder }}/scripts/setup-database.sh" ]; then
+                    echo "❌ ERROR: setup-database.sh not found!"
+                    echo "Expected location: {{ HomeFolder }}/scripts/setup-database.sh"
+                    ls -la "{{ HomeFolder }}/scripts/" || echo "Scripts directory doesn't exist"
+                    exit 1
+                  fi
+                  
+                  # Make executable
+                  chmod +x "{{ HomeFolder }}/scripts/setup-database.sh"
+                  
+                  # Source environment
+                  if [ -f "{{ HomeFolder }}/.env" ]; then
+                    source "{{ HomeFolder }}/.env"
+                    echo "✅ Environment loaded"
+                  else
+                    echo "❌ .env file not found"
+                    exit 1
+                  fi
+                  
+                  # Run database setup
+                  echo ""
+                  echo "Running database setup script..."
+                  echo "This will take 6-9 minutes to load 21,704 products with embeddings"
+                  echo ""
+                  
+                  cd "{{ HomeFolder }}"
+                  sudo -u participant bash -c 'source /workshop/.env && bash /workshop/scripts/setup-database.sh' 2>&1 | tee /workshop/database_setup.log
+                  
+                  SETUP_EXIT_CODE=${PIPESTATUS[0]}
+                  
+                  if [ $SETUP_EXIT_CODE -eq 0 ]; then
+                    echo ""
+                    echo "✅ DATABASE SETUP COMPLETED SUCCESSFULLY"
+                    
+                    # Verify database
+                    PRODUCT_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog;" 2>/dev/null | xargs)
+                    KB_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM public.knowledge_base;" 2>/dev/null | xargs)
+                    
+                    echo ""
+                    echo "Database Verification:"
+                    echo "  Products loaded: ${PRODUCT_COUNT:-0}"
+                    echo "  Knowledge base entries: ${KB_COUNT:-0}"
+                  else
+                    echo ""
+                    echo "❌ DATABASE SETUP FAILED"
+                    echo "Check /workshop/database_setup.log for details"
+                    exit 1
+                  fi
 
           - name: FinalValidation
             action: aws:runShellScript
@@ -648,277 +561,61 @@ Resources:
                 - |
                   echo "=== FINAL VALIDATION ==="
                   echo "Timestamp: $(date)"
-                  echo
                   
-                  # Wait for everything to settle
                   sleep 30
                   
-                  # ===== SERVICE STATUS CHECK =====
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  echo "SERVICE STATUS:"
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  
+                  # Service status
                   NGINX_STATUS=$(systemctl is-active nginx)
                   CODE_EDITOR_STATUS=$(systemctl is-active code-editor@participant)
                   
+                  echo "Service Status:"
                   echo "  Nginx: $NGINX_STATUS"
                   echo "  Code Editor: $CODE_EDITOR_STATUS"
-                  echo
                   
-                  # Check ports
+                  # Port check
+                  echo ""
                   echo "Listening Ports:"
                   ss -tlpn | grep -E ":(80|8080)" || echo "  WARNING: Expected ports not found"
-                  echo
                   
-                  # Test connectivity
+                  # Connectivity test
                   CODE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ || echo "failed")
                   NGINX_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/ || echo "failed")
                   
+                  echo ""
                   echo "Connectivity Tests:"
                   echo "  Code Editor (8080): $CODE_RESPONSE"
                   echo "  Nginx (80): $NGINX_RESPONSE"
-                  echo
                   
-                  # ===== DATABASE CONFIGURATION VALIDATION =====
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  echo "DATABASE CONFIGURATION:"
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  
-                  # Check .env file
-                  echo "📁 Configuration Files:"
-                  if [ -f "{{ HomeFolder }}/.env" ]; then
-                    echo "  ✅ .env file exists at {{ HomeFolder }}/.env"
+                  # Database validation
+                  echo ""
+                  echo "Database Status:"
+                  if [ -f "/workshop/.env" ]; then
+                    source /workshop/.env
                     
-                    # Validate .env contents (without showing password)
-                    if grep -q "DB_HOST=" "{{ HomeFolder }}/.env"; then
-                      DB_HOST=$(grep "^DB_HOST=" "{{ HomeFolder }}/.env" | cut -d'=' -f2)
-                      echo "    - DB_HOST: $DB_HOST"
-                    else
-                      echo "    - ⚠️  DB_HOST: Missing"
-                    fi
-                    
-                    if grep -q "DB_USER=" "{{ HomeFolder }}/.env"; then
-                      DB_USER=$(grep "^DB_USER=" "{{ HomeFolder }}/.env" | cut -d'=' -f2)
-                      echo "    - DB_USER: $DB_USER"
-                    else
-                      echo "    - ⚠️  DB_USER: Missing"
-                    fi
-                    
-                    if grep -q "DB_PASSWORD=" "{{ HomeFolder }}/.env"; then
-                      DB_PASSWORD_LINE=$(grep "^DB_PASSWORD=" "{{ HomeFolder }}/.env")
-                      if [ "${#DB_PASSWORD_LINE}" -gt 12 ]; then
-                        echo "    - DB_PASSWORD: ✅ Set (length: $((${#DB_PASSWORD_LINE} - 12)))"
-                      else
-                        echo "    - ⚠️  DB_PASSWORD: Empty or not set"
-                      fi
-                    else
-                      echo "    - ⚠️  DB_PASSWORD: Missing"
-                    fi
-                    
-                    if grep -q "DB_NAME=" "{{ HomeFolder }}/.env"; then
-                      DB_NAME=$(grep "^DB_NAME=" "{{ HomeFolder }}/.env" | cut -d'=' -f2)
-                      echo "    - DB_NAME: $DB_NAME"
-                    else
-                      echo "    - ⚠️  DB_NAME: Missing"
-                    fi
-                  else
-                    echo "  ❌ .env file NOT found at {{ HomeFolder }}/.env"
-                  fi
-                  
-                  # Check .pgpass file
-                  if [ -f "/home/participant/.pgpass" ]; then
-                    echo "  ✅ .pgpass file exists"
-                    PGPASS_LINES=$(wc -l < /home/participant/.pgpass)
-                    echo "    - Lines in .pgpass: $PGPASS_LINES"
-                  else
-                    echo "  ❌ .pgpass file NOT found"
-                  fi
-                  echo
-                  
-                  # Check environment variables in participant's shell
-                  echo "🔧 Environment Variables (participant user):"
-                  sudo -u participant bash -c 'source ~/.bashrc 2>/dev/null; 
-                    echo "  PGHOST: ${PGHOST:-Not set}"
-                    echo "  PGUSER: ${PGUSER:-Not set}"
-                    echo "  PGDATABASE: ${PGDATABASE:-Not set}"
-                    echo "  PGPASSWORD: $([ ! -z "$PGPASSWORD" ] && echo "Set (length: ${#PGPASSWORD})" || echo "Not set")"
-                    echo "  DB_SECRET_ARN: ${DB_SECRET_ARN:-Not set}"'
-                  echo
-                  
-                  # ===== DATABASE CONNECTION TEST =====
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  echo "DATABASE CONNECTION TEST:"
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  
-                  # Source .env and test database connection
-                  if [ -f "{{ HomeFolder }}/.env" ]; then
-                    source "{{ HomeFolder }}/.env"
-                    
-                    if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ] && [ ! -z "$DB_NAME" ]; then
-                      echo "Testing database connection..."
+                    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1;" &>/dev/null; then
+                      echo "  ✅ Database connection successful"
                       
-                      # Test with psql
-                      if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT version();" &>/dev/null; then
-                        echo "  ✅ Database connection SUCCESSFUL"
-                        
-                        # Check for extensions
-                        echo
-                        echo "  PostgreSQL Extensions:"
-                        PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT extname FROM pg_extension WHERE extname IN ('vector', 'pg_trgm');" 2>/dev/null | while read ext; do
-                          [ ! -z "$ext" ] && echo "    - $ext"
-                        done
-                        
-                        # Check schema and table
-                        # echo
-                        # echo "  Database Objects:"
-                        # SCHEMA_EXISTS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = 'bedrock_integration');" 2>/dev/null | xargs)
-                        # if [ "$SCHEMA_EXISTS" = "t" ]; then
-                        #   echo "    - ✅ Schema 'bedrock_integration' exists"
-                          
-                        #   TABLE_EXISTS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = 'bedrock_integration' AND table_name = 'product_catalog');" 2>/dev/null | xargs)
-                        #   if [ "$TABLE_EXISTS" = "t" ]; then
-                        #     echo "    - ✅ Table 'product_catalog' exists"
-                            
-                            # Check row count
-                        #     ROW_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog;" 2>/dev/null | xargs)
-                        #     echo "    - Product count: ${ROW_COUNT:-0}"
-                            
-                        #     # Check embeddings
-                        #     EMB_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog WHERE embedding IS NOT NULL;" 2>/dev/null | xargs)
-                        #     echo "    - Products with embeddings: ${EMB_COUNT:-0}"
-                        #   else
-                        #     echo "    - ⚠️  Table 'product_catalog' not found"
-                        #   fi
-                        # else
-                        #   echo "    - ⚠️  Schema 'bedrock_integration' not found"
-                        # fi
-                      else
-                        echo "  ❌ Database connection FAILED"
-                        echo "    - Host: $DB_HOST"
-                        echo "    - User: $DB_USER"
-                        echo "    - Database: $DB_NAME"
-                        echo "    - Password: $([ ! -z "$DB_PASSWORD" ] && echo 'Set' || echo 'Not set')"
-                      fi
-                    else
-                      echo "  ❌ Missing database credentials in .env"
-                      echo "    - DB_HOST: ${DB_HOST:-Missing}"
-                      echo "    - DB_USER: ${DB_USER:-Missing}"
-                      echo "    - DB_NAME: ${DB_NAME:-Missing}"
-                      echo "    - DB_PASSWORD: $([ ! -z "$DB_PASSWORD" ] && echo 'Set' || echo 'Missing')"
-                    fi
-                  else
-                    echo "  ❌ Cannot test - .env file not found"
-                  fi
-                  echo
-                  
-                  # ===== DATA LOADER LOG CHECK =====
-                  # echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  # echo "DATA LOADER STATUS:"
-                  # echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  
-                  # if [ -f "{{ HomeFolder }}/data_loader.log" ]; then
-                  #   echo "📋 Data loader log found"
-                    
-                  #   # Check for success indicators
-                  #   if grep -q "FULL DATA LOADING COMPLETE" "{{ HomeFolder }}/data_loader.log"; then
-                  #     echo "  ✅ Data loading completed successfully"
+                      PRODUCT_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog;" 2>/dev/null | xargs)
+                      KB_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM public.knowledge_base;" 2>/dev/null | xargs)
                       
-                  #     # Extract summary statistics
-                  #     tail -n 30 "{{ HomeFolder }}/data_loader.log" | grep -E "(Total rows|embeddings|Total time)" | while IFS= read -r line; do
-                  #       echo "    $line"
-                  #     done
-                  #   elif grep -q "Database connection failed" "{{ HomeFolder }}/data_loader.log"; then
-                  #     echo "  ❌ Data loading failed - database connection error"
-                  #   elif grep -q "Missing database credentials" "{{ HomeFolder }}/data_loader.log"; then
-                  #     echo "  ❌ Data loading failed - missing credentials"
-                  #   else
-                  #     echo "  ⚠️  Data loading status unclear"
-                  #   fi
-                    
-                    # Show last few error lines if any
-                    if grep -q "ERROR\|Failed\|failed" "{{ HomeFolder }}/data_loader.log"; then
-                      echo
-                      echo "  Recent errors:"
-                      grep -E "ERROR|Failed|failed" "{{ HomeFolder }}/data_loader.log" | tail -5 | while IFS= read -r line; do
-                        echo "    $line"
-                      done
+                      echo "  Products: ${PRODUCT_COUNT:-0}"
+                      echo "  Knowledge base: ${KB_COUNT:-0}"
+                    else
+                      echo "  ❌ Database connection failed"
                     fi
-                  else
-                    echo "  ⚠️  No data loader log found at {{ HomeFolder }}/data_loader.log"
-                  fi
-                  echo
-                  
-                  # ===== WORKSHOP FILES CHECK =====
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  echo "WORKSHOP FILES:"
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  
-                  echo "📂 Workshop directory contents:"
-                  if [ -d "{{ HomeFolder }}" ]; then
-                    ls -la "{{ HomeFolder }}" | head -15
-                    TOTAL_FILES=$(find "{{ HomeFolder }}" -type f | wc -l)
-                    echo "  Total files in workshop: $TOTAL_FILES"
-                  else
-                    echo "  ❌ Workshop directory not found"
-                  fi
-                  echo
-                  
-                  # ===== OVERALL VALIDATION RESULT =====
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  echo "VALIDATION SUMMARY:"
-                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                  
-                  VALIDATION_PASSED=true
-                  ISSUES=""
-                  
-                  # Check services
-                  if [[ "$NGINX_STATUS" != "active" ]]; then
-                    VALIDATION_PASSED=false
-                    ISSUES="$ISSUES\n  - Nginx service not active"
                   fi
                   
-                  if [[ "$CODE_EDITOR_STATUS" != "active" ]]; then
-                    VALIDATION_PASSED=false
-                    ISSUES="$ISSUES\n  - Code Editor service not active"
+                  # Overall validation
+                  echo ""
+                  if [[ "$NGINX_STATUS" == "active" && "$CODE_EDITOR_STATUS" == "active" ]]; then
+                    if [[ "$CODE_RESPONSE" =~ ^(200|302|401|403)$ && "$NGINX_RESPONSE" =~ ^(200|302|401|403)$ ]]; then
+                      echo "✅ VALIDATION PASSED"
+                      exit 0
+                    fi
                   fi
                   
-                  # Check connectivity
-                  if [[ ! "$CODE_RESPONSE" =~ ^(200|302|401|403)$ ]]; then
-                    VALIDATION_PASSED=false
-                    ISSUES="$ISSUES\n  - Code Editor not responding on port 8080"
-                  fi
-                  
-                  if [[ ! "$NGINX_RESPONSE" =~ ^(200|302|401|403)$ ]]; then
-                    VALIDATION_PASSED=false
-                    ISSUES="$ISSUES\n  - Nginx not responding on port 80"
-                  fi
-                  
-                  # Check database setup
-                  if [ ! -f "{{ HomeFolder }}/.env" ]; then
-                    VALIDATION_PASSED=false
-                    ISSUES="$ISSUES\n  - .env file missing"
-                  elif ! grep -q "DB_PASSWORD=" "{{ HomeFolder }}/.env" || [ "${#DB_PASSWORD_LINE}" -le 12 ]; then
-                    VALIDATION_PASSED=false
-                    ISSUES="$ISSUES\n  - DB_PASSWORD not properly set in .env"
-                  fi
-                  
-                  # Final result
-                  if [ "$VALIDATION_PASSED" = true ]; then
-                    echo "✅ VALIDATION PASSED"
-                    echo
-                    echo "Code Editor is accessible via CloudFront"
-                    echo "Database configuration is complete"
-                    echo "All services are running correctly"
-                    exit 0
-                  else
-                    echo "❌ VALIDATION FAILED"
-                    echo
-                    echo "Issues found:"
-                    echo -e "$ISSUES"
-                    echo
-                    echo "Please check the logs for more details"
-                    exit 1
-                  fi
+                  echo "❌ VALIDATION FAILED"
+                  exit 1
 
   # Lambda for running SSM document
   SSMDocLambdaRole:
@@ -943,7 +640,6 @@ Resources:
                   - ssm:SendCommand
                 Resource:
                   - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:document/${CodeEditorSSMDoc}
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:document/AmazonCloudWatch-ManageAgent
                   - !Sub arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${CodeEditorInstance}
               - Effect: Allow
                 Action:
@@ -954,7 +650,6 @@ Resources:
   RunSSMDocLambda:
     Type: AWS::Lambda::Function
     Properties:
-      Description: Run SSM document on EC2 instance
       Handler: index.lambda_handler
       Runtime: python3.13
       MemorySize: 128
@@ -988,7 +683,7 @@ Resources:
                   document_name = resource_properties['DocumentName']
                   cloudwatch_log_group_name = resource_properties['CloudWatchLogGroupName']
 
-                  logger.info(f'Running GitHub Bootstrap SSM Document {document_name} on EC2 instance {instance_id}')
+                  logger.info(f'Running SSM Document {document_name} on EC2 instance {instance_id}')
 
                   del resource_properties['ServiceToken']
                   if 'ServiceTimeout' in resource_properties:
@@ -1008,7 +703,7 @@ Resources:
                   time_remaining_ms = context.get_remaining_time_in_millis()
                   ssm = boto3.client('ssm')
 
-                  while (retry == True):
+                  while retry:
                       attempt_no += 1
                       logger.info(f'Attempt: {attempt_no}. Time Remaining: {time_remaining_ms/1000}s')
                       try:
@@ -1023,9 +718,9 @@ Resources:
                           cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, reason='OK')
                           retry = False
 
-                      except ssm.exceptions.InvalidInstanceId as e:
+                      except ssm.exceptions.InvalidInstanceId:
                           time_remaining_ms = context.get_remaining_time_in_millis()
-                          if (time_remaining_ms > abort_time_remaining_ms):
+                          if time_remaining_ms > abort_time_remaining_ms:
                               logger.info(f'Instance {instance_id} not ready. Sleeping: {sleep_ms/1000}s')
                               time.sleep(sleep_ms/1000)
                               retry = True
@@ -1088,7 +783,7 @@ Resources:
       DBClusterArn: !Ref DBClusterArn
       DBName: !Ref DBName
 
-  # Cache Policy for CloudFront
+  # Cache Policy
   CodeEditorCachePolicy:
     Type: AWS::CloudFront::CachePolicy
     Properties:
@@ -1140,7 +835,7 @@ Resources:
 
 Outputs:
   URL:
-    Description: Code Editor URL (with token authentication)
+    Description: Code Editor URL
     Value: !Sub 'https://${CloudFrontDistribution.DomainName}/?folder=${HomeFolder}&tkn=${SecretPlaintext.password}'
     
   Username:
@@ -1148,21 +843,13 @@ Outputs:
     Value: !GetAtt SecretPlaintext.username
     
   Password:
-    Description: Password (use for token authentication)
+    Description: Password
     Value: !GetAtt SecretPlaintext.password
-    
-  CloudFrontURL:
-    Description: CloudFront URL (base)
-    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
-    
-  TokenAuthURL:
-    Description: Direct token authentication URL
-    Value: !Sub 'https://${CloudFrontDistribution.DomainName}/?tkn=${SecretPlaintext.password}'
     
   InstanceId:
     Description: EC2 Instance ID
     Value: !Ref CodeEditorInstance
 
   BootstrapLogs:
-    Description: CloudWatch Logs for bootstrap execution
+    Description: CloudWatch Logs
     Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logsV2:log-groups/log-group/${SSMDocumentLogGroup}'
