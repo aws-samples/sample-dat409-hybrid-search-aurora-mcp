@@ -73,14 +73,6 @@ Parameters:
     Type: String
     Default: workshop_db
     Description: Database name
-  
-  PythonVersion:
-    Type: String
-    Default: "3.13"
-
-  PostgreSQLVersion:
-    Type: String
-    Default: "17.5"
 
 Conditions:
   IsGraviton: !Or
@@ -88,7 +80,6 @@ Conditions:
     - !Equals [!Select [0, !Split ['.', !Ref InstanceType]], 'c6g']
     - !Equals [!Select [0, !Split ['.', !Ref InstanceType]], 'm6g']
     - !Equals [!Select [0, !Split ['.', !Ref InstanceType]], 'r6g']
-  HasRepoUrl: !Not [!Equals [!Ref RepoUrl, '']]
 
 Mappings:
   ArmImage:
@@ -125,8 +116,8 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Name: !Sub
-      - ${InstanceName}-${RandomGUID}
-      - RandomGUID: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId ]]]]
+        - ${InstanceName}-${RandomGUID}
+        - RandomGUID: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId ]]]]
       Description: Code Editor user credentials
       GenerateSecretString:
         PasswordLength: 16
@@ -337,7 +328,7 @@ Resources:
                 - 'set -euo pipefail'
                 - !Sub |
                   echo "=== DAT409 Bootstrap (Infrastructure Only) ==="
-                  echo "Timestamp: $(date)"
+                  echo "Timestamp: $$(date)"
                   
                   export DB_SECRET_ARN="{{ DBSecretArn }}"
                   export DB_CLUSTER_ENDPOINT="{{ DBClusterEndpoint }}"
@@ -362,7 +353,7 @@ Resources:
                   AWS_REGION="${AWS::Region}" \
                   /tmp/bootstrap-code-editor.sh "{{ CodeEditorPassword }}"
                   
-                  if [ $? -eq 0 ]; then
+                  if [ $$? -eq 0 ]; then
                     echo "✅ Infrastructure bootstrap completed"
                   else
                     echo "❌ Bootstrap failed"
@@ -377,7 +368,7 @@ Resources:
               timeoutSeconds: 600
               runCommand:
                 - '#!/bin/bash'
-                - !Sub |
+                - |
                   if [ -n "{{ RepoUrl }}" ]; then
                     echo "Cloning workshop repository..."
                     sudo -u participant git clone "{{ RepoUrl }}" /tmp/workshop_repo
@@ -408,20 +399,20 @@ Resources:
                   
                   # Retrieve database credentials
                   if [ ! -z "{{ DBSecretArn }}" ]; then
-                    DB_SECRET=$(aws secretsmanager get-secret-value \
+                    DB_SECRET=$$(aws secretsmanager get-secret-value \
                       --secret-id "{{ DBSecretArn }}" \
                       --region ${AWS::Region} \
                       --query SecretString \
                       --output text 2>/dev/null)
                     
-                    if [ ! -z "$DB_SECRET" ]; then
-                      DB_HOST=$(echo "$DB_SECRET" | jq -r '.host // .endpoint // empty')
-                      DB_PORT=$(echo "$DB_SECRET" | jq -r '.port // "5432"')
-                      DB_NAME=$(echo "$DB_SECRET" | jq -r '.dbname // .database // empty')
-                      DB_USER=$(echo "$DB_SECRET" | jq -r '.username // .user // empty')
-                      DB_PASSWORD=$(echo "$DB_SECRET" | jq -r '.password // empty')
+                    if [ ! -z "$$DB_SECRET" ]; then
+                      DB_HOST=$$(echo "$$DB_SECRET" | jq -r '.host // .endpoint // empty')
+                      DB_PORT=$$(echo "$$DB_SECRET" | jq -r '.port // "5432"')
+                      DB_NAME=$$(echo "$$DB_SECRET" | jq -r '.dbname // .database // empty')
+                      DB_USER=$$(echo "$$DB_SECRET" | jq -r '.username // .user // empty')
+                      DB_PASSWORD=$$(echo "$$DB_SECRET" | jq -r '.password // empty')
                       
-                      if [ -z "$DB_HOST" ]; then
+                      if [ -z "$$DB_HOST" ]; then
                         DB_HOST="{{ DBClusterEndpoint }}"
                       fi
                     fi
@@ -429,20 +420,20 @@ Resources:
                   
                   # Create .env file
                   sudo -u participant tee "{{ HomeFolder }}/.env" << EOF
-                  DB_HOST=$DB_HOST
-                  DB_PORT=$DB_PORT
-                  DB_NAME=$DB_NAME
-                  DB_USER=$DB_USER
-                  DB_PASSWORD=$DB_PASSWORD
-                  DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME
+                  DB_HOST=$$DB_HOST
+                  DB_PORT=$$DB_PORT
+                  DB_NAME=$$DB_NAME
+                  DB_USER=$$DB_USER
+                  DB_PASSWORD=$$DB_PASSWORD
+                  DATABASE_URL=postgresql://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_NAME
                   DATABASE_SECRET_ARN={{ DBSecretArn }}
                   DATABASE_CLUSTER_ARN={{ DBClusterArn }}
                   AWS_REGION=${AWS::Region}
-                  PGHOST=$DB_HOST
-                  PGPORT=$DB_PORT
-                  PGDATABASE=$DB_NAME
-                  PGUSER=$DB_USER
-                  PGPASSWORD=$DB_PASSWORD
+                  PGHOST=$$DB_HOST
+                  PGPORT=$$DB_PORT
+                  PGDATABASE=$$DB_NAME
+                  PGUSER=$$DB_USER
+                  PGPASSWORD=$$DB_PASSWORD
                   EOF
                   
                   chmod 600 "{{ HomeFolder }}/.env"
@@ -450,9 +441,9 @@ Resources:
                   
                   # Create .pgpass
                   sudo -u participant bash -c "cat > /home/participant/.pgpass << PGPASS_EOF
-                  $DB_HOST:$DB_PORT:$DB_NAME:$DB_USER:$DB_PASSWORD
-                  $DB_HOST:$DB_PORT:*:$DB_USER:$DB_PASSWORD
-                  *:*:*:$DB_USER:$DB_PASSWORD
+                  $$DB_HOST:$$DB_PORT:$$DB_NAME:$$DB_USER:$$DB_PASSWORD
+                  $$DB_HOST:$$DB_PORT:*:$$DB_USER:$$DB_PASSWORD
+                  *:*:*:$$DB_USER:$$DB_PASSWORD
                   PGPASS_EOF"
                   
                   chmod 600 "/home/participant/.pgpass"
@@ -461,22 +452,22 @@ Resources:
                   # Update bashrc
                   cat >> /home/participant/.bashrc << BASHRC_EOF
                   export AWS_REGION="${AWS::Region}"
-                  export PATH=\$PATH:/home/participant/.local/bin
+                  export PATH=\$$PATH:/home/participant/.local/bin
                   
                   alias workshop="cd {{ HomeFolder }}"
                   alias lab1="cd {{ HomeFolder }}/lab1-hybrid-search"
                   alias lab2="cd {{ HomeFolder }}/lab2-mcp-agent"
                   
-                  export DB_HOST='$DB_HOST'
-                  export DB_PORT='$DB_PORT'
-                  export DB_NAME='$DB_NAME'
-                  export DB_USER='$DB_USER'
-                  export DB_PASSWORD='$DB_PASSWORD'
-                  export PGHOST='$DB_HOST'
-                  export PGPORT='$DB_PORT'
-                  export PGUSER='$DB_USER'
-                  export PGPASSWORD='$DB_PASSWORD'
-                  export PGDATABASE='$DB_NAME'
+                  export DB_HOST='$$DB_HOST'
+                  export DB_PORT='$$DB_PORT'
+                  export DB_NAME='$$DB_NAME'
+                  export DB_USER='$$DB_USER'
+                  export DB_PASSWORD='$$DB_PASSWORD'
+                  export PGHOST='$$DB_HOST'
+                  export PGPORT='$$DB_PORT'
+                  export PGUSER='$$DB_USER'
+                  export PGPASSWORD='$$DB_PASSWORD'
+                  export PGDATABASE='$$DB_NAME'
                   
                   if [ -f {{ HomeFolder }}/.env ]; then
                     set -a
@@ -496,7 +487,7 @@ Resources:
               timeoutSeconds: 1800
               runCommand:
                 - '#!/bin/bash'
-                - !Sub |
+                - |
                   echo "=========================================="
                   echo "AUTOMATED DATABASE SETUP"
                   echo "=========================================="
@@ -530,8 +521,7 @@ Resources:
                   
                   cd "{{ HomeFolder }}"
                   sudo -u participant bash -c 'source /workshop/.env && bash /workshop/scripts/setup-database.sh' 2>&1 | tee /workshop/database_setup.log
-                  
-                  SETUP_EXIT_CODE=${PIPESTATUS[0]}
+                  SETUP_EXIT_CODE=$?
                   
                   if [ $SETUP_EXIT_CODE -eq 0 ]; then
                     echo ""
@@ -539,12 +529,14 @@ Resources:
                     
                     # Verify database
                     PRODUCT_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog;" 2>/dev/null | xargs)
+                    if [ -z "$PRODUCT_COUNT" ]; then PRODUCT_COUNT=0; fi
                     KB_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM public.knowledge_base;" 2>/dev/null | xargs)
+                    if [ -z "$KB_COUNT" ]; then KB_COUNT=0; fi
                     
                     echo ""
                     echo "Database Verification:"
-                    echo "  Products loaded: ${PRODUCT_COUNT:-0}"
-                    echo "  Knowledge base entries: ${KB_COUNT:-0}"
+                    echo "  Products loaded: $PRODUCT_COUNT"
+                    echo "  Knowledge base entries: $KB_COUNT"
                   else
                     echo ""
                     echo "❌ DATABASE SETUP FAILED"
@@ -598,8 +590,8 @@ Resources:
                       PRODUCT_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog;" 2>/dev/null | xargs)
                       KB_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM public.knowledge_base;" 2>/dev/null | xargs)
                       
-                      echo "  Products: ${PRODUCT_COUNT:-0}"
-                      echo "  Knowledge base: ${KB_COUNT:-0}"
+                      echo "  Products: $${PRODUCT_COUNT:-0}"
+                      echo "  Knowledge base: $${KB_COUNT:-0}"
                     else
                       echo "  ❌ Database connection failed"
                     fi
@@ -765,9 +757,6 @@ Resources:
   # Run SSM Document
   RunCodeEditorSSMDoc:
     Type: Custom::RunSSMDocLambda
-    DependsOn:
-      - CodeEditorInstance
-      - CodeEditorSSMDoc
     Properties:
       ServiceToken: !GetAtt RunSSMDocLambda.Arn
       ServiceTimeout: 905
@@ -792,8 +781,8 @@ Resources:
         MaxTTL: 31536000
         MinTTL: 1
         Name: !Sub
-        - ${InstanceName}-${RandomGUID}
-        - RandomGUID: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId ]]]]
+          - ${InstanceName}-${RandomGUID}
+          - RandomGUID: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId ]]]]
         ParametersInCacheKeyAndForwardedToOrigin:
           CookiesConfig:
             CookieBehavior: all
