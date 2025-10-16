@@ -268,15 +268,18 @@ log "==================== End VS Code Extensions Section ===================="
 
 log "==================== Installing Python Packages ===================="
 
-log "Installing Lab 1 & 2 Python dependencies..."
+log "Installing Lab 1 Python dependencies..."
 sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
     pandas numpy boto3 psycopg pgvector matplotlib seaborn tqdm pandarallel \
-    jupyterlab jupyter streamlit plotly kaleido sqlalchemy \
-    langchain langchain-community sentence-transformers \
-    transformers accelerate einops psycopg-binary langchain-aws \
-    python-dotenv
+    jupyterlab jupyter ipywidgets notebook python-dotenv psycopg-binary
 
-check_success "Python package installation"
+check_success "Lab 1 Python package installation"
+
+log "Installing Lab 2 Python dependencies..."
+sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
+    streamlit plotly pillow requests
+
+check_success "Lab 2 Python package installation"
 
 # Install uv/uvx for MCP
 log "Installing uv/uvx for MCP..."
@@ -520,23 +523,82 @@ INSTRUCTIONS_EOF
 
 chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/ENABLE_BEDROCK_FIRST.md"
 
-# Create placeholder for database setup script
-cat > "$HOME_FOLDER/setup-database.sh" << 'PLACEHOLDER_EOF'
+# Download setup-database.sh script from GitHub
+log "Downloading setup-database.sh script..."
+curl -fsSL "https://raw.githubusercontent.com/aws-samples/sample-dat409-hybrid-search-aurora-mcp/main/scripts/setup-database.sh" \
+    -o "$HOME_FOLDER/setup-database.sh"
+
+if [ -f "$HOME_FOLDER/setup-database.sh" ]; then
+    chmod +x "$HOME_FOLDER/setup-database.sh"
+    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/setup-database.sh"
+    log "✅ setup-database.sh downloaded successfully"
+else
+    warn "Failed to download setup-database.sh - creating placeholder"
+    cat > "$HOME_FOLDER/setup-database.sh" << 'PLACEHOLDER_EOF'
 #!/bin/bash
-echo "❌ ERROR: Database setup script not yet uploaded!"
-echo ""
-echo "Instructors: Please upload the actual setup-database.sh script"
-echo "This is just a placeholder file."
-echo ""
-echo "The script should:"
-echo "1. Create database schema and tables"
-echo "2. Load 21,704 products with embeddings"
-echo "3. Set up Lab 2 RLS and knowledge base"
+echo "❌ ERROR: Database setup script not available!"
+echo "Please check GitHub repository for the latest version."
 exit 1
 PLACEHOLDER_EOF
+    chmod +x "$HOME_FOLDER/setup-database.sh"
+    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/setup-database.sh"
+fi
 
-chmod +x "$HOME_FOLDER/setup-database.sh"
-chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/setup-database.sh"
+# ===========================================================================
+# AUTOMATED DATABASE SETUP
+# ===========================================================================
+
+log "==================== Starting Automated Database Setup ===================="
+
+# Wait for Aurora cluster to be fully available
+log "Waiting for Aurora cluster to be available..."
+MAX_DB_WAIT=60  # 60 * 10 seconds = 10 minutes
+DB_WAIT_COUNT=0
+
+while [ $DB_WAIT_COUNT -lt $MAX_DB_WAIT ]; do
+    if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_PASSWORD" ]; then
+        if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+            -c "SELECT 1;" &>/dev/null; then
+            log "✅ Database is available and accepting connections"
+            break
+        fi
+    fi
+    
+    DB_WAIT_COUNT=$((DB_WAIT_COUNT + 1))
+    if [ $DB_WAIT_COUNT -eq $MAX_DB_WAIT ]; then
+        warn "Database not available after 10 minutes - skipping automated setup"
+        warn "Run /workshop/setup-database.sh manually when database is ready"
+        break
+    fi
+    
+    log "Waiting for database... (attempt $DB_WAIT_COUNT/$MAX_DB_WAIT)"
+    sleep 10
+done
+
+# Run database setup if database is available
+if [ $DB_WAIT_COUNT -lt $MAX_DB_WAIT ] && [ -f "$HOME_FOLDER/setup-database.sh" ]; then
+    log "Running automated database setup..."
+    log "This will take 6-9 minutes to load 21,704 products with embeddings"
+    
+    # Run as participant user with environment variables
+    sudo -u "$CODE_EDITOR_USER" bash -c "
+        source /workshop/.env
+        cd /workshop
+        bash /workshop/setup-database.sh 2>&1 | tee /workshop/database-setup.log
+    "
+    
+    if [ $? -eq 0 ]; then
+        log "✅ Database setup completed successfully!"
+        log "Check /workshop/database-setup.log for details"
+    else
+        warn "Database setup encountered issues"
+        warn "Check /workshop/database-setup.log for details"
+        warn "You can re-run: /workshop/setup-database.sh"
+    fi
+else
+    warn "Skipping automated database setup"
+    warn "Run manually: /workshop/setup-database.sh"
+fi
 
 log "==================== Bootstrap Summary ===================="
 echo "✅ INFRASTRUCTURE SETUP COMPLETE"
@@ -545,9 +607,11 @@ echo "Services Running:"
 echo "  Nginx: $(systemctl is-active nginx)"
 echo "  Code Editor: $(systemctl is-active code-editor@$CODE_EDITOR_USER)"
 echo ""
-echo "Next Steps:"
-echo "  1. Enable Bedrock models in AWS Console"
-echo "  2. Run setup-database.sh to load data"
-echo ""
+if [ -f "/workshop/database-setup.log" ]; then
+    echo "Database Setup:"
+    echo "  Status: Check /workshop/database-setup.log"
+    echo "  Products: $(grep -o 'Products loaded: [0-9,]*' /workshop/database-setup.log 2>/dev/null || echo 'Check log')"
+    echo ""
+fi
 echo "Access Code Editor via CloudFront with token: $CODE_EDITOR_PASSWORD"
 log "============================================================"
