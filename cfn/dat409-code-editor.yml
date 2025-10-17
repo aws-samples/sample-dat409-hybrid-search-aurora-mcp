@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'DAT409 - Code Editor with Automated Database Setup'
+Description: 'DAT409 - Code Editor Infrastructure Setup'
 
 Parameters:
   TemplateName:
@@ -281,7 +281,7 @@ Resources:
       DocumentType: Command
       Content:
         schemaVersion: '2.2'
-        description: DAT409 Code Editor Bootstrap with Automated Database Setup
+        description: DAT409 Code Editor Infrastructure Bootstrap
         parameters:
           CodeEditorPassword:
             type: String
@@ -362,9 +362,8 @@ Resources:
                   DB_NAME="{{ DBName }}" \
                   AWS_REGION="${AWS::Region}" \
                   /tmp/bootstrap-code-editor.sh "{{ CodeEditorPassword }}"
-                  BOOTSTRAP_EXIT_CODE=\$?
                   
-                  if [ \$BOOTSTRAP_EXIT_CODE -eq 0 ]; then
+                  if [ $$? -eq 0 ]; then
                     echo "✅ Infrastructure bootstrap completed"
                   else
                     echo "❌ Bootstrap failed"
@@ -393,166 +392,17 @@ Resources:
                       chmod +x "{{ HomeFolder }}/scripts/setup-database.sh" 2>/dev/null || true
                       chmod +x "{{ HomeFolder }}/scripts/verify-setup.sh" 2>/dev/null || true
                       
+                      chown -R participant:participant "{{ HomeFolder }}"
+                      
                       echo "✅ Repository cloned successfully"
+                      echo ""
+                      echo "📘 Next Steps:"
+                      echo "  1. Access Code Editor via CloudFront URL"
+                      echo "  2. Run: cd /workshop && bash scripts/setup-database.sh"
+                      echo "  3. This will load 21,704 products with embeddings (6-9 min)"
                     else
                       echo "WARNING: Repository clone failed"
                     fi
-                  fi
-
-          - name: SetupWorkshopEnvironment
-            action: aws:runShellScript
-            inputs:
-              timeoutSeconds: 600
-              runCommand:
-                - '#!/bin/bash'
-                - !Sub |
-                  echo "Setting up workshop environment..."
-                  
-                  # Retrieve database credentials
-                  if [ ! -z "{{ DBSecretArn }}" ]; then
-                    DB_SECRET=\$(aws secretsmanager get-secret-value \
-                      --secret-id "{{ DBSecretArn }}" \
-                      --region ${AWS::Region} \
-                      --query SecretString \
-                      --output text 2>/dev/null)
-                    
-                    if [ ! -z "\$DB_SECRET" ]; then
-                      DB_HOST=\$(echo "\$DB_SECRET" | jq -r '.host // .endpoint // empty')
-                      DB_PORT=\$(echo "\$DB_SECRET" | jq -r '.port // "5432"')
-                      DB_NAME=\$(echo "\$DB_SECRET" | jq -r '.dbname // .database // empty')
-                      DB_USER=\$(echo "\$DB_SECRET" | jq -r '.username // .user // empty')
-                      DB_PASSWORD=\$(echo "\$DB_SECRET" | jq -r '.password // empty')
-                      
-                      if [ -z "\$DB_HOST" ]; then
-                        DB_HOST="{{ DBClusterEndpoint }}"
-                      fi
-                    fi
-                  fi
-                  
-                  # Create .env file
-                  sudo -u participant tee "{{ HomeFolder }}/.env" << EOF
-                  DB_HOST=\$DB_HOST
-                  DB_PORT=\$DB_PORT
-                  DB_NAME=\$DB_NAME
-                  DB_USER=\$DB_USER
-                  DB_PASSWORD=\$DB_PASSWORD
-                  DATABASE_URL=postgresql://\$DB_USER:\$DB_PASSWORD@\$DB_HOST:\$DB_PORT/\$DB_NAME
-                  DATABASE_SECRET_ARN={{ DBSecretArn }}
-                  DATABASE_CLUSTER_ARN={{ DBClusterArn }}
-                  AWS_REGION=${AWS::Region}
-                  PGHOST=\$DB_HOST
-                  PGPORT=\$DB_PORT
-                  PGDATABASE=\$DB_NAME
-                  PGUSER=\$DB_USER
-                  PGPASSWORD=\$DB_PASSWORD
-                  EOF
-                  
-                  chmod 600 "{{ HomeFolder }}/.env"
-                  chown participant:participant "{{ HomeFolder }}/.env"
-                  
-                  # Create .pgpass
-                  sudo -u participant bash -c "cat > /home/participant/.pgpass << PGPASS_EOF
-                  \$DB_HOST:\$DB_PORT:\$DB_NAME:\$DB_USER:\$DB_PASSWORD
-                  \$DB_HOST:\$DB_PORT:*:\$DB_USER:\$DB_PASSWORD
-                  *:*:*:\$DB_USER:\$DB_PASSWORD
-                  PGPASS_EOF"
-                  
-                  chmod 600 "/home/participant/.pgpass"
-                  chown participant:participant "/home/participant/.pgpass"
-                  
-                  # Update bashrc
-                  cat >> /home/participant/.bashrc << BASHRC_EOF
-                  export AWS_REGION="${AWS::Region}"
-                  export PATH=\$PATH:/home/participant/.local/bin
-                  
-                  alias workshop="cd {{ HomeFolder }}"
-                  alias lab1="cd {{ HomeFolder }}/lab1-hybrid-search"
-                  alias lab2="cd {{ HomeFolder }}/lab2-mcp-agent"
-                  
-                  export DB_HOST='\$DB_HOST'
-                  export DB_PORT='\$DB_PORT'
-                  export DB_NAME='\$DB_NAME'
-                  export DB_USER='\$DB_USER'
-                  export DB_PASSWORD='\$DB_PASSWORD'
-                  export PGHOST='\$DB_HOST'
-                  export PGPORT='\$DB_PORT'
-                  export PGUSER='\$DB_USER'
-                  export PGPASSWORD='\$DB_PASSWORD'
-                  export PGDATABASE='\$DB_NAME'
-                  
-                  if [ -f {{ HomeFolder }}/.env ]; then
-                    set -a
-                    source {{ HomeFolder }}/.env 2>/dev/null || true
-                    set +a
-                  fi
-                  
-                  echo "📘 DAT409 Workshop Ready!"
-                  echo "🔧 Commands: psql, workshop, lab1, lab2"
-                  BASHRC_EOF
-                  
-                  chown -R participant:participant "{{ HomeFolder }}"
-
-          - name: RunAutomatedDatabaseSetup
-            action: aws:runShellScript
-            inputs:
-              timeoutSeconds: 1800
-              runCommand:
-                - '#!/bin/bash'
-                - |
-                  echo "=========================================="
-                  echo "AUTOMATED DATABASE SETUP"
-                  echo "=========================================="
-                  echo "Timestamp: $(date)"
-                  
-                  # Check if setup script exists
-                  if [ ! -f "{{ HomeFolder }}/scripts/setup-database.sh" ]; then
-                    echo "❌ ERROR: setup-database.sh not found!"
-                    echo "Expected location: {{ HomeFolder }}/scripts/setup-database.sh"
-                    ls -la "{{ HomeFolder }}/scripts/" || echo "Scripts directory doesn't exist"
-                    exit 1
-                  fi
-                  
-                  # Make executable
-                  chmod +x "{{ HomeFolder }}/scripts/setup-database.sh"
-                  
-                  # Source environment
-                  if [ -f "{{ HomeFolder }}/.env" ]; then
-                    source "{{ HomeFolder }}/.env"
-                    echo "✅ Environment loaded"
-                  else
-                    echo "❌ .env file not found"
-                    exit 1
-                  fi
-                  
-                  # Run database setup
-                  echo ""
-                  echo "Running database setup script..."
-                  echo "This will take 6-9 minutes to load 21,704 products with embeddings"
-                  echo ""
-                  
-                  cd "{{ HomeFolder }}"
-                  sudo -u participant bash -c 'source /workshop/.env && bash /workshop/scripts/setup-database.sh' 2>&1 | tee /workshop/database_setup.log
-                  SETUP_EXIT_CODE=$?
-                  
-                  if [ $SETUP_EXIT_CODE -eq 0 ]; then
-                    echo ""
-                    echo "✅ DATABASE SETUP COMPLETED SUCCESSFULLY"
-                    
-                    # Verify database
-                    PRODUCT_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog;" 2>/dev/null | xargs)
-                    if [ -z "$PRODUCT_COUNT" ]; then PRODUCT_COUNT=0; fi
-                    KB_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM public.knowledge_base;" 2>/dev/null | xargs)
-                    if [ -z "$KB_COUNT" ]; then KB_COUNT=0; fi
-                    
-                    echo ""
-                    echo "Database Verification:"
-                    echo "  Products loaded: $PRODUCT_COUNT"
-                    echo "  Knowledge base entries: $KB_COUNT"
-                  else
-                    echo ""
-                    echo "❌ DATABASE SETUP FAILED"
-                    echo "Check /workshop/database_setup.log for details"
-                    exit 1
                   fi
 
           - name: FinalValidation
@@ -589,30 +439,25 @@ Resources:
                   echo "  Code Editor (8080): $CODE_RESPONSE"
                   echo "  Nginx (80): $NGINX_RESPONSE"
                   
-                  # Database validation
+                  # Repository check
                   echo ""
-                  echo "Database Status:"
-                  if [ -f "/workshop/.env" ]; then
-                    source /workshop/.env
-                    
-                    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1;" &>/dev/null; then
-                      echo "  ✅ Database connection successful"
-                      
-                      PRODUCT_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog;" 2>/dev/null | xargs)
-                      KB_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM public.knowledge_base;" 2>/dev/null | xargs)
-                      
-                      echo "  Products: ${PRODUCT_COUNT:-0}"
-                      echo "  Knowledge base: ${KB_COUNT:-0}"
-                    else
-                      echo "  ❌ Database connection failed"
-                    fi
+                  echo "Workshop Files:"
+                  if [ -f "/workshop/scripts/setup-database.sh" ]; then
+                    echo "  ✅ setup-database.sh present"
+                  else
+                    echo "  ❌ setup-database.sh missing"
                   fi
                   
                   # Overall validation
                   echo ""
                   if [[ "$NGINX_STATUS" == "active" && "$CODE_EDITOR_STATUS" == "active" ]]; then
                     if [[ "$CODE_RESPONSE" =~ ^(200|302|401|403)$ && "$NGINX_RESPONSE" =~ ^(200|302|401|403)$ ]]; then
-                      echo "✅ VALIDATION PASSED"
+                      echo "✅ INFRASTRUCTURE SETUP COMPLETE"
+                      echo ""
+                      echo "📘 Next Steps:"
+                      echo "  1. Access Code Editor via CloudFront URL"
+                      echo "  2. Open terminal and run: cd /workshop && bash scripts/setup-database.sh"
+                      echo "  3. Database setup takes 6-9 minutes"
                       exit 0
                     fi
                   fi
