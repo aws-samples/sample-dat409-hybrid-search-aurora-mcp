@@ -972,6 +972,10 @@ def strands_agent_search(
         
         tools = mcp_client.list_tools_sync()
             
+        # Calculate denied content types
+        all_content_types = ['product_faq', 'support_ticket', 'internal_note', 'analytics']
+        denied_types = [ct for ct in all_content_types if ct not in PERSONAS[persona]['access_levels']]
+        
         agent = Agent(
             tools=tools,
             model="us.anthropic.claude-sonnet-4-20250514-v1:0",
@@ -983,15 +987,15 @@ IMPORTANT SCHEMA:
 
 Current persona: {persona} (simulating {PERSONAS[persona]['db_user']})
 
-SECURITY - CRITICAL: Always filter knowledge_base queries with:
-WHERE '{persona}' = ANY(persona_access) OR persona_access IS NULL
+SECURITY RESTRICTIONS:
+1. ONLY query knowledge_base table with this filter:
+   WHERE '{persona}' = ANY(persona_access) OR persona_access IS NULL
+2. ALLOWED content_type: {', '.join(PERSONAS[persona]['access_levels'])}
+3. DENIED content_type: {', '.join(denied_types) if denied_types else 'none'}
+4. If asked for denied content types, respond: "Access denied. {persona} role cannot access {', '.join(denied_types)} content."
+5. Do NOT query product_catalog directly for analytics - only through authorized knowledge_base content
 
-Access levels for {persona}:
-{', '.join(PERSONAS[persona]['access_levels'])}
-
-NOTE: persona_access is a PostgreSQL array. Use ARRAY syntax for comparisons.
-
-Provide clear responses based on filtered query results."""
+Provide responses only from your authorized knowledge_base content."""
         )
         
         start_time = time.time()
@@ -1750,13 +1754,18 @@ with tab2:
                         
                         # Explain how the agent works
                         with st.expander("🔍 How It Works", expanded=False):
-                            st.markdown("""
+                            st.markdown(f"""
                             **Agent Architecture:**
                             
                             1. 🧠 **Strands Agent** receives your natural language query
                             2. 🤖 **Claude Sonnet 4** analyzes the query and decides which MCP tools to use
                             3. 🔧 **MCP Tools** execute SQL queries against Aurora PostgreSQL via Data API
                             4. 📊 **Agent synthesizes** the database results into a natural language response
+                            
+                            **Security Enforcement:**
+                            - ✅ Allowed: {', '.join(PERSONAS[selected_persona]['access_levels'])}
+                            - ❌ Denied: {', '.join([ct for ct in ['product_faq', 'support_ticket', 'internal_note', 'analytics'] if ct not in PERSONAS[selected_persona]['access_levels']]) or 'none'}
+                            - 🔒 Filter: WHERE '{selected_persona}' = ANY(persona_access)
                             
                             **Note:** The Strands framework abstracts away tool call details, so SQL queries are not exposed in the response object. However, the agent successfully queries the database to provide accurate answers.
                             """)
