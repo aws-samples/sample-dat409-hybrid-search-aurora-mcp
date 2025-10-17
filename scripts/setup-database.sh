@@ -433,9 +433,9 @@ cat > /tmp/lab2_setup.sql << 'SQL_LAB2'
 -- ============================================================
 
 -- 1. Create knowledge_base table
-DROP TABLE IF EXISTS public.knowledge_base CASCADE;
+DROP TABLE IF EXISTS bedrock_integration.knowledge_base CASCADE;
 
-CREATE TABLE public.knowledge_base (
+CREATE TABLE bedrock_integration.knowledge_base (
     id SERIAL PRIMARY KEY,
     product_id VARCHAR(255),
     content TEXT NOT NULL,
@@ -453,9 +453,9 @@ CREATE TABLE public.knowledge_base (
 );
 
 -- Create indexes
-CREATE INDEX idx_kb_product_id ON knowledge_base(product_id);
-CREATE INDEX idx_kb_persona_access ON knowledge_base USING GIN (persona_access);
-CREATE INDEX idx_kb_content_type ON knowledge_base(content_type);
+CREATE INDEX idx_kb_product_id ON bedrock_integration.knowledge_base(product_id);
+CREATE INDEX idx_kb_persona_access ON bedrock_integration.knowledge_base USING GIN (persona_access);
+CREATE INDEX idx_kb_content_type ON bedrock_integration.knowledge_base(content_type);
 
 -- 2. Handle RLS users with proper cleanup
 DO $$
@@ -496,24 +496,22 @@ CREATE USER agent_user WITH PASSWORD 'agent123';
 CREATE USER pm_user WITH PASSWORD 'pm123';
 
 -- Grant appropriate permissions
-GRANT USAGE ON SCHEMA public TO customer_user, agent_user, pm_user;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO customer_user, agent_user, pm_user;
 GRANT USAGE ON SCHEMA bedrock_integration TO customer_user, agent_user, pm_user;
 GRANT SELECT ON ALL TABLES IN SCHEMA bedrock_integration TO customer_user, agent_user, pm_user;
 
 -- 3. Enable RLS
-ALTER TABLE knowledge_base ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bedrock_integration.knowledge_base ENABLE ROW LEVEL SECURITY;
 
 -- 4. Create RLS policies
-CREATE POLICY customer_policy ON knowledge_base
+CREATE POLICY customer_policy ON bedrock_integration.knowledge_base
     FOR SELECT TO customer_user
     USING ('customer' = ANY(persona_access));
 
-CREATE POLICY agent_policy ON knowledge_base
+CREATE POLICY agent_policy ON bedrock_integration.knowledge_base
     FOR SELECT TO agent_user  
     USING ('support_agent' = ANY(persona_access));
 
-CREATE POLICY pm_policy ON knowledge_base
+CREATE POLICY pm_policy ON bedrock_integration.knowledge_base
     FOR SELECT TO pm_user
     USING (true);
 
@@ -526,7 +524,7 @@ WITH target_products AS (
     ORDER BY reviews DESC NULLS LAST
     LIMIT 50
 )
-INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+INSERT INTO bedrock_integration.knowledge_base (product_id, content, content_type, persona_access, severity)
 SELECT 
     p."productId",
     'Q: What is the warranty period? A: This product comes with a standard 1-year manufacturer warranty.',
@@ -542,7 +540,7 @@ WITH high_review_products AS (
     WHERE reviews > 10000
     LIMIT 25
 )
-INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+INSERT INTO bedrock_integration.knowledge_base (product_id, content, content_type, persona_access, severity)
 SELECT 
     p."productId",
     'Support Ticket #' || (1000 + row_number() OVER()) || ': Customer reported connectivity issues - Resolved by firmware update',
@@ -558,7 +556,7 @@ WITH expensive_products AS (
     WHERE price > 100
     LIMIT 25
 )
-INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity)
+INSERT INTO bedrock_integration.knowledge_base (product_id, content, content_type, persona_access, severity)
 SELECT 
     p."productId",
     'Analytics Report: Product showing 15% month-over-month growth in sales',
@@ -568,7 +566,7 @@ SELECT
 FROM expensive_products p;
 
 -- Add general knowledge base entries
-INSERT INTO knowledge_base (product_id, content, content_type, persona_access, severity) VALUES
+INSERT INTO bedrock_integration.knowledge_base (product_id, content, content_type, persona_access, severity) VALUES
 (NULL, 'Holiday return policy has been extended through January 31st', 'product_faq', ARRAY['customer', 'support_agent', 'product_manager'], 'low'),
 (NULL, 'System maintenance scheduled for Sunday 2:00 AM - 4:00 AM PST', 'internal_note', ARRAY['support_agent', 'product_manager'], 'medium'),
 (NULL, 'New product launch guidelines updated - please review before Q2', 'internal_note', ARRAY['product_manager'], 'high');
@@ -611,19 +609,19 @@ echo
 echo "1. CUSTOMER VIEW (public content only):"
 echo "-----------------------------------------"
 PGPASSWORD=customer123 psql -h $DB_HOST -p $DB_PORT -U customer_user -d $DB_NAME -c \
-    "SELECT content_type, COUNT(*) FROM knowledge_base GROUP BY content_type ORDER BY content_type;"
+    "SELECT content_type, COUNT(*) FROM bedrock_integration.knowledge_base GROUP BY content_type ORDER BY content_type;"
 
 echo
 echo "2. SUPPORT AGENT VIEW (public + support content):"
 echo "---------------------------------------------------"
 PGPASSWORD=agent123 psql -h $DB_HOST -p $DB_PORT -U agent_user -d $DB_NAME -c \
-    "SELECT content_type, COUNT(*) FROM knowledge_base GROUP BY content_type ORDER BY content_type;"
+    "SELECT content_type, COUNT(*) FROM bedrock_integration.knowledge_base GROUP BY content_type ORDER BY content_type;"
 
 echo
 echo "3. PRODUCT MANAGER VIEW (all content):"
 echo "---------------------------------------"
 PGPASSWORD=pm123 psql -h $DB_HOST -p $DB_PORT -U pm_user -d $DB_NAME -c \
-    "SELECT content_type, COUNT(*) FROM knowledge_base GROUP BY content_type ORDER BY content_type;"
+    "SELECT content_type, COUNT(*) FROM bedrock_integration.knowledge_base GROUP BY content_type ORDER BY content_type;"
 
 echo
 echo "=========================================="
@@ -648,10 +646,10 @@ LAB1_EMBEDDINGS=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U 
 
 # Verify Lab 2
 LAB2_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
-    -t -c "SELECT COUNT(*) FROM public.knowledge_base;" 2>/dev/null | xargs)
+    -t -c "SELECT COUNT(*) FROM bedrock_integration.knowledge_base;" 2>/dev/null | xargs)
 
 LAB2_POLICIES=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
-    -t -c "SELECT COUNT(*) FROM pg_policies WHERE tablename='knowledge_base';" 2>/dev/null | xargs)
+    -t -c "SELECT COUNT(*) FROM pg_policies WHERE schemaname='bedrock_integration' AND tablename='knowledge_base';" 2>/dev/null | xargs)
 
 # ============================================================================
 # SUMMARY
