@@ -247,7 +247,6 @@ cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
     "notebook.defaultKernel": "python3",
     "terminal.integrated.defaultProfile.linux": "bash",
     "terminal.integrated.cwd": "/workshop",
-    "terminal.integrated.showOnStartup": "always",
     "files.autoSave": "afterDelay",
     "files.autoSaveDelay": 1000,
     "workbench.startupEditor": "none",
@@ -264,6 +263,41 @@ cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
 VSCODE_SETTINGS
 
 chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$SETTINGS_DIR"
+
+# Create workspace settings to auto-open terminal
+log "Creating workspace settings for auto-open terminal..."
+sudo -u "$CODE_EDITOR_USER" mkdir -p "$HOME_FOLDER/.vscode"
+cat > "$HOME_FOLDER/.vscode/settings.json" << 'WORKSPACE_SETTINGS'
+{
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.cwd": "/workshop",
+    "task.autoDetect": "on"
+}
+WORKSPACE_SETTINGS
+
+# Create tasks.json to auto-open terminal on workspace load
+cat > "$HOME_FOLDER/.vscode/tasks.json" << 'TASKS_JSON'
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Open Terminal",
+            "type": "shell",
+            "command": "echo 'Terminal ready'",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "focus": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
+TASKS_JSON
+
+chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/.vscode"
 
 log "==================== End VS Code Extensions Section ===================="
 
