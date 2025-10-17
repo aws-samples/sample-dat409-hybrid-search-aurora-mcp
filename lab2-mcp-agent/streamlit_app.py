@@ -1409,7 +1409,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "🎓 Key Takeaways"
 ])
 
-# TAB 1: MCP Context Search
+# TAB 2: Search Comparison
 with tab2:
     st.info("ℹ️ **Lab 1 Reference**: These are the search methods you built in the Jupyter notebook. This tab demonstrates how they work together in a production application.")
     st.markdown("### Compare Search Methods Side-by-Side")
@@ -1644,7 +1644,7 @@ with tab2:
                     st.error(f"Search error: {str(e)}")
 
 
-# TAB 2: Enhanced Search Comparison
+# TAB 1: MCP Context Search
 with tab1:
     st.markdown("### MCP Context Search with RLS Policies")
     st.caption(f"Currently viewing as: **{PERSONAS[selected_persona]['name']}** {PERSONAS[selected_persona]['icon']}")

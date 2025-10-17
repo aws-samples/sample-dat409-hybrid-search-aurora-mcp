@@ -283,15 +283,18 @@ cat > "$HOME_FOLDER/.vscode/tasks.json" << 'TASKS_JSON'
         {
             "label": "Open Terminal",
             "type": "shell",
-            "command": "echo 'Terminal ready'",
+            "command": ":",
             "presentation": {
                 "reveal": "always",
                 "panel": "dedicated",
-                "focus": false
+                "focus": false,
+                "close": false
             },
             "runOptions": {
                 "runOn": "folderOpen"
-            }
+            },
+            "isBackground": true,
+            "problemMatcher": []
         }
     ]
 }
