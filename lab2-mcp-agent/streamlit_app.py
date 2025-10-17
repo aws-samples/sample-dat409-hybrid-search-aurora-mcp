@@ -1240,7 +1240,7 @@ st.markdown("""
     <p style="color: #00D9FF; font-size: 1.1rem; margin-top: 0.5rem; font-weight: 500;">
         ⚡ Powering AI Agents with Enterprise-Grade Search
     </p>
-    <p style="color: #B0B0B0; font-size: 1rem; margin-top: 0.5rem;">
+    <p style="color: #FFFFFF; font-size: 1rem; margin-top: 0.5rem;">
         Aurora PostgreSQL • pgvector • Cohere • Model Context Protocol
     </p>
 </div>
@@ -2242,7 +2242,7 @@ with tab4:
 # Footer
 st.markdown("---")
 st.markdown("""
-<div style="text-align: center; color: #666; padding: 2rem 0;">
+<div style="text-align: center; color: #FFFFFF; padding: 2rem 0;">
     <p style="font-size: 1.1rem;">DAT409: Hybrid Search with Aurora PostgreSQL</p>
     <p style="font-size: 0.875rem;">Built with Streamlit, pgvector, Cohere, and MCP</p>
     <p style="font-size: 0.75rem; margin-top: 1rem;">Amazon Web Services • re:Invent 2025</p>
