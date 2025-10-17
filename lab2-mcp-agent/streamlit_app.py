@@ -1255,7 +1255,7 @@ with st.sidebar:
     
     # Persona selection with enhanced styling
     st.markdown("### 👤 Persona (RLS)")
-    st.caption("⚠️ Used in MCP Context Search (Tab 2) only")
+    st.caption("⚠️ Used in MCP Context Search (Tab 1) only")
     selected_persona = st.selectbox(
         "Select Role",
         options=list(PERSONAS.keys()),
@@ -1403,203 +1403,16 @@ USING gin(product_description gin_trgm_ops);""")
 # ============================================================================
 
 tab1, tab2, tab3 = st.tabs([
-    "🔍 Search Comparison",
     "🎯 MCP Context Search",
+    "🔍 Search Comparison",
     "🔬 Advanced Analysis (OPTIONAL)"
 ])
 
-# TAB 1: Enhanced Search Comparison
-with tab1:
+# TAB 1: MCP Context Search
+with tab2:
+    st.info("ℹ️ **Lab 1 Reference**: These are the search methods you built in the Jupyter notebook. This tab demonstrates how they work together in a production application.")
     st.markdown("### Compare Search Methods Side-by-Side")
     st.caption("🚀 See how different search algorithms perform on the same query")
-    
-    st.markdown("---")
-    
-    # Quick action buttons with better layout
-    st.markdown("**⚡ Quick Try:**")
-    quick_cols = st.columns(5)
-    quick_queries = ["wireless headphones", "security camera", "robot vacuum", "smart doorbell", "laptop"]
-    for idx, q in enumerate(quick_queries):
-        with quick_cols[idx]:
-            if st.button(f"💡 {q}", key=f"quick_{idx}"):
-                st.session_state.quick_search = q
-                st.rerun()
-    
-    st.markdown("---")
-    
-    # Options row
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        use_rerank = st.checkbox(
-            "✨ Use Cohere Rerank",
-            value=False,
-            key='use_rerank',
-            help="Apply Cohere's reranking model for better relevance"
-        )
-    with col2:
-        show_all = st.checkbox("📊 Show All", value=False, key='show_all')
-    
-    # Initialize comparison_query if needed
-    if 'comparison_query' not in st.session_state:
-        st.session_state.comparison_query = ''
-    
-    # Handle quick search button clicks
-    if 'quick_search' in st.session_state:
-        st.session_state.comparison_query = st.session_state.quick_search
-        del st.session_state.quick_search
-    
-    search_query = st.text_input(
-        "Search Query",
-        placeholder="Enter your search query (e.g., wireless headphones, security camera...)",
-        key='comparison_query'
-    )
-    
-    search_button = st.button("🔍 Search All Methods", type="primary")
-    
-    with st.expander("💡 Understanding Search Scores", expanded=False):
-        st.markdown("""
-        **Why Semantic Search Often Has Higher Scores:**
-        
-        - **Semantic (0.0-1.0)**: Cosine similarity between embeddings - naturally produces scores closer to 1.0 for relevant matches
-        - **Keyword (0.0-1.0)**: PostgreSQL ts_rank_cd scores - typically lower values even for good matches
-        - **Fuzzy (0.0-1.0)**: Trigram similarity - requires very close character matches to score high
-        - **Hybrid**: Weighted combination of Semantic + Keyword scores
-        
-        **Key Insight:** Higher scores don't always mean better results! Each method excels at different query types:
-        - Use **Semantic** for conceptual/meaning-based searches
-        - Use **Keyword** for exact term matching
-        - Use **Fuzzy** for typo-tolerant searches
-        - Use **Hybrid** for balanced results
-        
-        ---
-        
-        **💡 Understanding Hybrid Search Approaches:**
-        
-        **Challenge:** Different search methods produce vastly different score ranges (semantic: 0.7-1.0, keyword: 0.01-0.1), causing one method to dominate weighted combinations.
-        
-        **Solutions Demonstrated:**
-        - ✅ **Hybrid (70/30)** - Weighted score fusion (simple but requires tuning)
-        - ✅ **Hybrid-RRF** (Tab 3) - Rank-based fusion (robust, no normalization needed) ✨
-        - ✅ **Cohere Rerank** (checkbox above) - ML-based re-ranking (most sophisticated)
-        
-        **Try it:** Enable Cohere Rerank or check out RRF in Tab 3!
-        """)
-    
-    if search_button and search_query:
-        # Create columns first
-        cols = st.columns(4)
-        
-        # Perform actual search with spinner
-        with st.spinner("🔍 Searching across all methods..."):
-            results_data = {}
-            methods = [
-                ('Keyword', lambda q: keyword_search(q, results_limit, selected_persona)),
-                ('Fuzzy', lambda q: fuzzy_search(q, results_limit, selected_persona)),
-                ('Semantic', lambda q: semantic_search(q, results_limit, selected_persona)),
-                ('Hybrid', lambda q: hybrid_search(q, semantic_weight, keyword_weight, results_limit, selected_persona))
-            ]
-        
-        for idx, (method_name, method_func) in enumerate(methods):
-            with cols[idx]:
-                st.markdown(f"#### {method_name}")
-                
-                start_time = time.time()
-                try:
-                    results = method_func(search_query)
-                    elapsed = time.time() - start_time
-                    
-                    if use_rerank and results:
-                        rerank_start = time.time()
-                        results = rerank_results(search_query, results, len(results))
-                        rerank_time = time.time() - rerank_start
-                        total_time = elapsed + rerank_time
-                        st.caption(f"⏱️ {elapsed*1000:.0f}ms + {rerank_time*1000:.0f}ms rerank")
-                    else:
-                        total_time = elapsed
-                        st.caption(f"⏱️ {elapsed*1000:.0f}ms")
-                    
-                    if results:
-                        st.caption(f"✅ {len(results)} results")
-                        
-                        display_count = len(results) if show_all else 3
-                        for result in results[:display_count]:
-                            with st.container():
-                                render_product_card(result, show_score=True)
-                        
-                        if f'results_{method_name}' not in st.session_state:
-                            st.session_state[f'results_{method_name}'] = results
-                    else:
-                        show_empty_state("No results found", "🔍")
-                    
-                    results_data[method_name] = {
-                        'count': len(results),
-                        'time': total_time,
-                        'avg_score': sum(r.get('score', 0) for r in results) / len(results) if results else 0
-                    }
-                    
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-        
-        # Add to search history
-        if search_query:
-            st.session_state.search_history.append({
-                'query': search_query,
-                'timestamp': datetime.now().isoformat(),
-                'persona': selected_persona
-            })
-            st.session_state.search_history = st.session_state.search_history[-10:]
-        
-        # Performance charts
-        if results_data:
-            st.markdown("---")
-            st.markdown("### 📊 Performance Metrics")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                fig_time = go.Figure(data=[
-                    go.Bar(
-                        x=list(results_data.keys()),
-                        y=[v['time'] * 1000 for v in results_data.values()],
-                        marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
-                        text=[f"{v['time']*1000:.0f}ms" for v in results_data.values()],
-                        textposition='auto',
-                    )
-                ])
-                fig_time.update_layout(
-                    title="Response Time",
-                    yaxis_title="Milliseconds",
-                    paper_bgcolor='#0a0a0a',
-                    plot_bgcolor='#1a1a1a',
-                    font=dict(color='#E0E0E0'),
-                    height=300
-                )
-                st.plotly_chart(fig_time, use_container_width=True)
-            
-            with col2:
-                fig_score = go.Figure(data=[
-                    go.Bar(
-                        x=list(results_data.keys()),
-                        y=[v['avg_score'] for v in results_data.values()],
-                        marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
-                        text=[f"{v['avg_score']:.3f}" for v in results_data.values()],
-                        textposition='auto',
-                    )
-                ])
-                fig_score.update_layout(
-                    title="Average Relevance Score",
-                    yaxis_title="Score",
-                    paper_bgcolor='#0a0a0a',
-                    plot_bgcolor='#1a1a1a',
-                    font=dict(color='#E0E0E0'),
-                    height=300
-                )
-                st.plotly_chart(fig_score, use_container_width=True)
-
-# TAB 2: MCP Context Search (Keep all original functionality)
-with tab2:
-    st.markdown("### MCP Context Search with RLS Policies")
-    st.caption(f"Currently viewing as: **{PERSONAS[selected_persona]['name']}** {PERSONAS[selected_persona]['icon']}")
     
     with st.expander("🔒 About Row-Level Security (RLS)", expanded=False):
         st.markdown("""
@@ -1828,6 +1641,196 @@ with tab2:
                         
                 except Exception as e:
                     st.error(f"Search error: {str(e)}")
+
+
+# TAB 2: Enhanced Search Comparison
+with tab1:
+    st.markdown("### MCP Context Search with RLS Policies")
+    st.caption(f"Currently viewing as: **{PERSONAS[selected_persona]['name']}** {PERSONAS[selected_persona]['icon']}")
+    
+    st.markdown("---")
+    
+    # Quick action buttons with better layout
+    st.markdown("**⚡ Quick Try:**")
+    quick_cols = st.columns(5)
+    quick_queries = ["wireless headphones", "security camera", "robot vacuum", "smart doorbell", "laptop"]
+    for idx, q in enumerate(quick_queries):
+        with quick_cols[idx]:
+            if st.button(f"💡 {q}", key=f"quick_{idx}"):
+                st.session_state.quick_search = q
+                st.rerun()
+    
+    st.markdown("---")
+    
+    # Options row
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        use_rerank = st.checkbox(
+            "✨ Use Cohere Rerank",
+            value=False,
+            key='use_rerank',
+            help="Apply Cohere's reranking model for better relevance"
+        )
+    with col2:
+        show_all = st.checkbox("📊 Show All", value=False, key='show_all')
+    
+    # Initialize comparison_query if needed
+    if 'comparison_query' not in st.session_state:
+        st.session_state.comparison_query = ''
+    
+    # Handle quick search button clicks
+    if 'quick_search' in st.session_state:
+        st.session_state.comparison_query = st.session_state.quick_search
+        del st.session_state.quick_search
+    
+    search_query = st.text_input(
+        "Search Query",
+        placeholder="Enter your search query (e.g., wireless headphones, security camera...)",
+        key='comparison_query'
+    )
+    
+    search_button = st.button("🔍 Search All Methods", type="primary")
+    
+    with st.expander("💡 Understanding Search Scores", expanded=False):
+        st.markdown("""
+        **Why Semantic Search Often Has Higher Scores:**
+        
+        - **Semantic (0.0-1.0)**: Cosine similarity between embeddings - naturally produces scores closer to 1.0 for relevant matches
+        - **Keyword (0.0-1.0)**: PostgreSQL ts_rank_cd scores - typically lower values even for good matches
+        - **Fuzzy (0.0-1.0)**: Trigram similarity - requires very close character matches to score high
+        - **Hybrid**: Weighted combination of Semantic + Keyword scores
+        
+        **Key Insight:** Higher scores don't always mean better results! Each method excels at different query types:
+        - Use **Semantic** for conceptual/meaning-based searches
+        - Use **Keyword** for exact term matching
+        - Use **Fuzzy** for typo-tolerant searches
+        - Use **Hybrid** for balanced results
+        
+        ---
+        
+        **💡 Understanding Hybrid Search Approaches:**
+        
+        **Challenge:** Different search methods produce vastly different score ranges (semantic: 0.7-1.0, keyword: 0.01-0.1), causing one method to dominate weighted combinations.
+        
+        **Solutions Demonstrated:**
+        - ✅ **Hybrid (70/30)** - Weighted score fusion (simple but requires tuning)
+        - ✅ **Hybrid-RRF** (Tab 3) - Rank-based fusion (robust, no normalization needed) ✨
+        - ✅ **Cohere Rerank** (checkbox above) - ML-based re-ranking (most sophisticated)
+        
+        **Try it:** Enable Cohere Rerank or check out RRF in Tab 3!
+        """)
+    
+    if search_button and search_query:
+        # Create columns first
+        cols = st.columns(4)
+        
+        # Perform actual search with spinner
+        with st.spinner("🔍 Searching across all methods..."):
+            results_data = {}
+            methods = [
+                ('Keyword', lambda q: keyword_search(q, results_limit, selected_persona)),
+                ('Fuzzy', lambda q: fuzzy_search(q, results_limit, selected_persona)),
+                ('Semantic', lambda q: semantic_search(q, results_limit, selected_persona)),
+                ('Hybrid', lambda q: hybrid_search(q, semantic_weight, keyword_weight, results_limit, selected_persona))
+            ]
+        
+        for idx, (method_name, method_func) in enumerate(methods):
+            with cols[idx]:
+                st.markdown(f"#### {method_name}")
+                
+                start_time = time.time()
+                try:
+                    results = method_func(search_query)
+                    elapsed = time.time() - start_time
+                    
+                    if use_rerank and results:
+                        rerank_start = time.time()
+                        results = rerank_results(search_query, results, len(results))
+                        rerank_time = time.time() - rerank_start
+                        total_time = elapsed + rerank_time
+                        st.caption(f"⏱️ {elapsed*1000:.0f}ms + {rerank_time*1000:.0f}ms rerank")
+                    else:
+                        total_time = elapsed
+                        st.caption(f"⏱️ {elapsed*1000:.0f}ms")
+                    
+                    if results:
+                        st.caption(f"✅ {len(results)} results")
+                        
+                        display_count = len(results) if show_all else 3
+                        for result in results[:display_count]:
+                            with st.container():
+                                render_product_card(result, show_score=True)
+                        
+                        if f'results_{method_name}' not in st.session_state:
+                            st.session_state[f'results_{method_name}'] = results
+                    else:
+                        show_empty_state("No results found", "🔍")
+                    
+                    results_data[method_name] = {
+                        'count': len(results),
+                        'time': total_time,
+                        'avg_score': sum(r.get('score', 0) for r in results) / len(results) if results else 0
+                    }
+                    
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+        
+        # Add to search history
+        if search_query:
+            st.session_state.search_history.append({
+                'query': search_query,
+                'timestamp': datetime.now().isoformat(),
+                'persona': selected_persona
+            })
+            st.session_state.search_history = st.session_state.search_history[-10:]
+        
+        # Performance charts
+        if results_data:
+            st.markdown("---")
+            st.markdown("### 📊 Performance Metrics")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig_time = go.Figure(data=[
+                    go.Bar(
+                        x=list(results_data.keys()),
+                        y=[v['time'] * 1000 for v in results_data.values()],
+                        marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
+                        text=[f"{v['time']*1000:.0f}ms" for v in results_data.values()],
+                        textposition='auto',
+                    )
+                ])
+                fig_time.update_layout(
+                    title="Response Time",
+                    yaxis_title="Milliseconds",
+                    paper_bgcolor='#0a0a0a',
+                    plot_bgcolor='#1a1a1a',
+                    font=dict(color='#E0E0E0'),
+                    height=300
+                )
+                st.plotly_chart(fig_time, use_container_width=True)
+            
+            with col2:
+                fig_score = go.Figure(data=[
+                    go.Bar(
+                        x=list(results_data.keys()),
+                        y=[v['avg_score'] for v in results_data.values()],
+                        marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
+                        text=[f"{v['avg_score']:.3f}" for v in results_data.values()],
+                        textposition='auto',
+                    )
+                ])
+                fig_score.update_layout(
+                    title="Average Relevance Score",
+                    yaxis_title="Score",
+                    paper_bgcolor='#0a0a0a',
+                    plot_bgcolor='#1a1a1a',
+                    font=dict(color='#E0E0E0'),
+                    height=300
+                )
+                st.plotly_chart(fig_score, use_container_width=True)
+
 
 # TAB 3: Advanced Analysis
 with tab3:
