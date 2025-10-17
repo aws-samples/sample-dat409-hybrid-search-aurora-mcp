@@ -362,8 +362,9 @@ Resources:
                   DB_NAME="{{ DBName }}" \
                   AWS_REGION="${AWS::Region}" \
                   /tmp/bootstrap-code-editor.sh "{{ CodeEditorPassword }}"
+                  BOOTSTRAP_EXIT_CODE=$$?
                   
-                  if [ $$? -eq 0 ]; then
+                  if [ $$BOOTSTRAP_EXIT_CODE -eq 0 ]; then
                     echo "✅ Infrastructure bootstrap completed"
                   else
                     echo "❌ Bootstrap failed"
@@ -600,8 +601,8 @@ Resources:
                       PRODUCT_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog;" 2>/dev/null | xargs)
                       KB_COUNT=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM public.knowledge_base;" 2>/dev/null | xargs)
                       
-                      echo "  Products: $${PRODUCT_COUNT:-0}"
-                      echo "  Knowledge base: $${KB_COUNT:-0}"
+                      echo "  Products: ${PRODUCT_COUNT:-0}"
+                      echo "  Knowledge base: ${KB_COUNT:-0}"
                     else
                       echo "  ❌ Database connection failed"
                     fi
