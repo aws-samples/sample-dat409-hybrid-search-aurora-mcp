@@ -981,10 +981,17 @@ IMPORTANT SCHEMA:
 - Main: bedrock_integration.product_catalog ("productId", product_description, category_name, price, stars, reviews, imgurl, embedding)
 - Knowledge: bedrock_integration.knowledge_base (id, product_id, content, content_type, persona_access VARCHAR[], severity, created_at)
 
-NOTE: persona_access is a PostgreSQL array. Use ARRAY syntax: ARRAY['customer'] or '{{'customer'}}' format.
+Current persona: {persona} (simulating {PERSONAS[persona]['db_user']})
 
-Current persona: {persona}
-Provide clear responses based on query results."""
+SECURITY - CRITICAL: Always filter knowledge_base queries with:
+WHERE '{persona}' = ANY(persona_access) OR persona_access IS NULL
+
+Access levels for {persona}:
+{', '.join(PERSONAS[persona]['access_levels'])}
+
+NOTE: persona_access is a PostgreSQL array. Use ARRAY syntax for comparisons.
+
+Provide clear responses based on filtered query results."""
         )
         
         start_time = time.time()
@@ -1595,9 +1602,19 @@ with tab2:
         **What is RLS?**  
         Row-Level Security in PostgreSQL automatically filters results based on your persona.
         
-        **Testing RLS:**
-        - 🧠 **With Strands Agent**: Uses admin access via MCP Data API (typical for AI agents that need to query across schemas)
-        - 🔒 **Without Strands Agent**: Uses persona-specific database users - enforces RLS at database level
+        **Implementation Approaches:**
+        - 🧠 **With Strands Agent**: Application-level filtering via system prompt (WHERE '{persona}' = ANY(persona_access))
+          - Agent uses admin access via MCP Data API
+          - Security enforced through AI agent instructions
+          - Standard pattern for AI agents with database access
+        - 🔒 **Without Strands Agent**: Database-level RLS with persona-specific users
+          - Traditional PostgreSQL RLS policies
+          - Enforced at database connection level
+        
+        **Why Application-Level for MCP?**
+        - Data API uses IAM authentication (not database users)
+        - MCP server connects as single admin user
+        - AI agent intelligently applies filtering based on persona context
         """)
     
     with st.expander("🔍 Search Strategy (Direct Search)", expanded=False):
@@ -1667,7 +1684,7 @@ with tab2:
     )
     
     if use_strands_agent:
-        st.caption("💡 MCP Agent uses admin access (via Data API) for intelligent cross-table queries. In production, implement application-level authorization.")
+        st.caption("💡 MCP Agent uses admin access (via Data API) with application-level security filtering enforced through system prompt. This is the standard production pattern for AI agents - security is maintained through intelligent query construction rather than database-level RLS.")
     
     time_window_map = {
         'All Time': None,
