@@ -1402,10 +1402,11 @@ USING gin(product_description gin_trgm_ops);""")
 # MAIN TABS
 # ============================================================================
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "🎯 MCP Context Search",
     "🔍 Search Comparison",
-    "🔬 Advanced Analysis (OPTIONAL)"
+    "🔬 Advanced Analysis (OPTIONAL)",
+    "🎓 Key Takeaways"
 ])
 
 # TAB 1: MCP Context Search
@@ -1920,78 +1921,40 @@ LIMIT 10;
     
     st.info("💡 **Recommendation:** Use Cohere Rerank for user-facing search (better accuracy), and RRF for internal tools or when latency/cost is a concern.")
     
-    # Section 1: Query Analysis
+    # Section 1: Query Analysis (Condensed)
     st.markdown("---")
     st.markdown("## 🧠 Query Analysis")
     
     if 'comparison_query' in st.session_state and st.session_state.comparison_query:
         search_query = st.session_state.comparison_query
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        # Query characteristics
         word_count = len(search_query.split())
-        char_count = len(search_query)
-        has_special = any(c in search_query for c in ['-', '_', '/', '&'])
-        is_phrase = word_count > 3
         
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Words", word_count)
         with col2:
-            st.metric("Characters", char_count)
+            st.metric("Characters", len(search_query))
         with col3:
-            st.metric("Type", "Phrase" if is_phrase else "Keywords")
-        with col4:
-            st.metric("Special Chars", "✅" if has_special else "❌")
+            query_type = "Phrase" if word_count > 3 else "Keywords"
+            st.metric("Type", query_type)
         
         # Recommended search method
-        st.markdown("### 🎯 Recommended Search Method")
         if word_count == 1:
-            recommendation = "**Fuzzy Search** - Single word queries benefit from typo tolerance"
-            reason = "Fuzzy matching handles misspellings and variations effectively for single terms."
-        elif word_count <= 3 and not has_special:
+            recommendation = "**Fuzzy Search** - Single word benefits from typo tolerance"
+        elif word_count <= 3:
             recommendation = "**Keyword Search** - Short queries work well with full-text search"
-            reason = "PostgreSQL full-text search excels at exact term matching with stemming."
-        elif is_phrase:
-            recommendation = "**Semantic Search** - Long phrases capture intent better with embeddings"
-            reason = "Vector embeddings understand context and meaning in longer queries."
+        elif word_count > 3:
+            recommendation = "**Semantic Search** - Long phrases capture intent with embeddings"
         else:
             recommendation = "**Hybrid Search** - Balanced approach for mixed queries"
-            reason = "Combines semantic understanding with keyword precision for optimal results."
         
-        st.info(f"{recommendation}\n\n{reason}")
-        
-        # Query preprocessing insights
-        st.markdown("### 🔧 Preprocessing Pipeline")
-        preprocessing_cols = st.columns(3)
-        with preprocessing_cols[0]:
-            st.markdown("""
-            **Text Normalization**
-            - ✅ Lowercase conversion
-            - ✅ Whitespace trimming
-            - ✅ Special char handling
-            """)
-        with preprocessing_cols[1]:
-            st.markdown("""
-            **Embedding Generation**
-            - ✅ Cohere Embed v3
-            - ✅ 1024 dimensions
-            - ✅ Cosine similarity
-            """)
-        with preprocessing_cols[2]:
-            st.markdown("""
-            **Tokenization**
-            - ✅ Trigram generation
-            - ✅ English stemming
-            - ✅ Stop word filtering
-            """)
+        st.info(f"🎯 {recommendation}")
     else:
-        st.info("👉 Run a search in Tab 1 to see query analysis")
+        st.info("👉 Run a search in Tab 2 to see query analysis")
     
-    # Section 2: Result Overlap Analysis
+    # Section 2: Result Overlap Analysis (Condensed)
     st.markdown("---")
     st.markdown("## 📊 Result Overlap Analysis")
-    st.caption("Understanding how different search methods agree on relevant results")
     
     # Get product IDs from each method
     method_results = {}
@@ -2002,19 +1965,14 @@ LIMIT 10;
             )
     
     if len(method_results) >= 2:
-        # Calculate overlaps
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.metric("Total Unique Products", len(set().union(*method_results.values())))
-        
+            st.metric("Total Unique", len(set().union(*method_results.values())))
         with col2:
-            # Products in all methods
             common_all = set.intersection(*method_results.values()) if method_results else set()
             st.metric("In All Methods", len(common_all))
-        
         with col3:
-            # Average overlap
             overlaps = []
             methods = list(method_results.keys())
             for i in range(len(methods)):
@@ -2022,142 +1980,264 @@ LIMIT 10;
                     overlap = len(method_results[methods[i]] & method_results[methods[j]])
                     overlaps.append(overlap)
             avg_overlap = sum(overlaps) / len(overlaps) if overlaps else 0
-            st.metric("Avg Pairwise Overlap", f"{avg_overlap:.1f}")
+            st.metric("Avg Overlap", f"{avg_overlap:.1f}")
         
-        # Method-specific unique results
-        st.markdown("### Unique Results per Method")
-        unique_cols = st.columns(4)
-        for idx, (method, ids) in enumerate(method_results.items()):
-            other_ids = set().union(*[v for k, v in method_results.items() if k != method])
-            unique = ids - other_ids
-            with unique_cols[idx]:
-                st.metric(method, len(unique), delta=f"{len(unique)} unique")
-        
-        st.info("💡 **Interpretation:** High overlap indicates methods agree on relevance. Low overlap means methods find different aspects of the query.")
-        
-        # Pairwise overlap matrix
-        st.markdown("### Pairwise Overlap Matrix")
-        overlap_data = []
-        for m1 in methods:
-            row = []
-            for m2 in methods:
-                if m1 == m2:
-                    row.append(len(method_results[m1]))
-                else:
-                    row.append(len(method_results[m1] & method_results[m2]))
-            overlap_data.append(row)
-        
-        df_overlap = pd.DataFrame(overlap_data, columns=methods, index=methods)
-        st.dataframe(df_overlap, width='stretch')
-        
+        st.info("💡 High overlap = methods agree on relevance. Low overlap = methods find different aspects.")
     else:
-        st.info("👉 Run a search in Tab 1 to see result overlap analysis")
+        st.info("👉 Run a search in Tab 2 to see overlap analysis")
     
-    # Section 3: Index Performance
+    # Section 3: Index Configuration (Condensed)
     st.markdown("---")
-    st.markdown("## 🔧 Index Configuration & Performance")
-    st.caption("PostgreSQL index setup and tuning parameters for production")
+    st.markdown("## 🔧 Index Configuration Quick Reference")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("### Vector Index (HNSW)")
-        st.code("""CREATE INDEX ON product_catalog 
-USING hnsw (embedding vector_cosine_ops)
-WITH (m = 16, ef_construction = 64);""")
+        st.markdown("**Vector (HNSW)**")
+        st.code("""CREATE INDEX 
+USING hnsw (embedding 
+vector_cosine_ops)
+WITH (m=16, 
+ef_construction=64);""")
+        st.caption("m=16: connections/layer | ef=64: build quality")
+    
+    with col2:
+        st.markdown("**Full-Text (GIN)**")
+        st.code("""CREATE INDEX 
+USING gin(
+  to_tsvector(
+    'english', 
+    description)
+);""")
+        st.caption("Stemming + stop words + ranking")
+    
+    with col3:
+        st.markdown("**Trigram (GIN)**")
+        st.code("""CREATE INDEX 
+USING gin(
+  description 
+  gin_trgm_ops
+);""")
+        st.caption("Fuzzy matching + typo tolerance")
+    
+    st.markdown("---")
+    st.markdown("## 🚀 Quick Tuning Tips")
+    
+    st.markdown("""
+    **Query Optimization:**
+    - HNSW is 10-100x faster than IVFFlat for reads
+    - Combine vector search with WHERE clauses for filtering
+    - Use EXPLAIN ANALYZE to profile slow queries
+    - Cache common query results (Redis/ElastiCache)
+    
+    **Index Maintenance:**
+    - VACUUM ANALYZE after bulk updates
+    - Monitor index bloat with pg_stat_user_indexes
+    - Consider partitioning for >10M rows
+    """)
+
+# TAB 4: Key Takeaways
+with tab4:
+    st.markdown("### 🎓 Workshop Key Takeaways")
+    st.caption("💡 Essential concepts and decision frameworks from DAT409")
+    
+    st.markdown("---")
+    
+    # Search Method Selection
+    st.markdown("## 🎯 When to Use Each Search Method")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
         st.markdown("""
-        **Parameters:**
-        - `m=16`: Max connections per layer
-          - Higher = better recall, more memory
-          - Typical range: 8-64
-        - `ef_construction=64`: Build-time search
-          - Higher = better quality, slower build
-          - Typical range: 32-512
+        ### 🧠 Semantic Search
+        **Use When:**
+        - Conceptual queries ("eco-friendly products")
+        - Cross-language search
+        - Synonym/paraphrase matching
+        - User intent matters more than exact words
+        
+        **Avoid When:**
+        - Exact SKU/model number lookup
+        - Structured data queries
+        - Low-latency requirements (<10ms)
         """)
     
     with col2:
-        st.markdown("### Full-Text Index (GIN)")
-        st.code("""CREATE INDEX ON product_catalog 
-USING gin(
-  to_tsvector('english', 
-              product_description)
-);""")
         st.markdown("""
-        **Features:**
-        - English language stemming
-        - Stop word removal
-        - Fast phrase matching
-        - Supports ranking (ts_rank)
+        ### 🔑 Keyword Search
+        **Use When:**
+        - Exact term matching ("iPhone 15 Pro")
+        - Boolean queries (AND/OR/NOT)
+        - Phrase matching ("wireless charging")
+        - Structured field search
+        
+        **Avoid When:**
+        - Typos are common
+        - Conceptual/semantic queries
+        - Multi-language content
         """)
     
     with col3:
-        st.markdown("### Trigram Index (GIN)")
-        st.code("""CREATE INDEX ON product_catalog 
-USING gin(
-  product_description 
-  gin_trgm_ops
-);""")
         st.markdown("""
-        **Configuration:**
-        - Similarity threshold: 0.1
-        - Trigram tokenization
-        - Fuzzy matching support
-        - Typo tolerance
+        ### 🎯 Fuzzy Search
+        **Use When:**
+        - Typo tolerance needed
+        - Partial word matching
+        - Auto-complete/suggestions
+        - User input is unreliable
+        
+        **Avoid When:**
+        - Precision is critical
+        - Large result sets (slow)
+        - Exact matching required
         """)
     
-    # Performance recommendations
-    st.markdown("---")
-    st.markdown("## 🚀 Production Tuning Recommendations")
-    
-    rec_col1, rec_col2 = st.columns(2)
-    
-    with rec_col1:
-        st.markdown("""
-        ### Query Optimization
-        - ✅ Use HNSW for semantic search (10-100x faster than IVFFlat)
-        - ✅ Set appropriate `ef_search` for recall/speed tradeoff
-        - ✅ Combine with WHERE clauses for filtered search
-        - ✅ Use EXPLAIN ANALYZE to profile queries
-        - ✅ Consider query result caching for common searches
-        """)
-    
-    with rec_col2:
-        st.markdown("""
-        ### Index Maintenance
-        - ✅ Monitor index bloat with pg_stat_user_indexes
-        - ✅ VACUUM ANALYZE after bulk updates
-        - ✅ Adjust work_mem for large index builds
-        - ✅ Use parallel index creation for large tables
-        - ✅ Consider partitioning for very large datasets (>10M rows)
-        """)
+    st.info("💡 **Best Practice:** Use hybrid search (all three) for production applications, weighted by use case.")
     
     st.markdown("---")
-    st.markdown("## 📚 Additional Resources")
     
-    resource_cols = st.columns(3)
-    with resource_cols[0]:
+    # Index Selection
+    st.markdown("## 🛠️ HNSW vs IVFFlat Trade-offs")
+    
+    comparison_df = pd.DataFrame({
+        "Aspect": ["Query Speed", "Build Time", "Memory Usage", "Recall", "Best For"],
+        "HNSW": ["⚡ Faster (10-50ms)", "🐢 Slower (hours for 1M+)", "📈 Higher (2-3x data)", "🎯 95-99%", "Production, read-heavy"],
+        "IVFFlat": ["🐢 Slower (50-200ms)", "⚡ Faster (minutes)", "📉 Lower (1.5x data)", "🎯 85-95%", "Development, write-heavy"]
+    })
+    
+    st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+    
+    st.markdown("""
+    **Decision Framework:**
+    - **HNSW**: Choose for user-facing search, >100K vectors, read-heavy workloads
+    - **IVFFlat**: Choose for rapid prototyping, frequent updates, cost optimization
+    - **Tuning**: HNSW `m=16, ef_construction=64` balances speed/accuracy for most cases
+    """)
+    
+    st.markdown("---")
+    
+    # MCP Importance
+    st.markdown("## 🤝 Why MCP Matters for AI Agents")
+    
+    mcp_col1, mcp_col2 = st.columns(2)
+    
+    with mcp_col1:
         st.markdown("""
-        **pgvector Documentation**
-        - [GitHub Repository](https://github.com/pgvector/pgvector)
-        - [HNSW Algorithm](https://arxiv.org/abs/1603.09320)
-        - [Performance Tuning](https://github.com/pgvector/pgvector#performance)
+        ### Traditional RAG Limitations
+        - ❌ Fixed retrieval patterns
+        - ❌ No query-time filtering
+        - ❌ Limited context awareness
+        - ❌ Static embeddings only
+        - ❌ No structured data access
         """)
     
-    with resource_cols[1]:
+    with mcp_col2:
         st.markdown("""
-        **PostgreSQL Full-Text Search**
-        - [Official Docs](https://www.postgresql.org/docs/current/textsearch.html)
-        - [GIN Indexes](https://www.postgresql.org/docs/current/gin.html)
-        - [pg_trgm Extension](https://www.postgresql.org/docs/current/pgtrgm.html)
+        ### MCP Advantages
+        - ✅ Dynamic tool selection
+        - ✅ SQL-level filtering (time, persona)
+        - ✅ Multi-step reasoning
+        - ✅ Hybrid retrieval (vector + keyword)
+        - ✅ Direct database queries
         """)
     
-    with resource_cols[2]:
+    st.success("""
+    🎯 **Key Insight:** MCP enables agents to intelligently choose retrieval strategies based on query type, 
+    rather than forcing all queries through the same embedding pipeline.
+    """)
+    
+    st.markdown("---")
+    
+    # RLS Patterns
+    st.markdown("## 🔒 RLS Patterns for Multi-Tenant AI Apps")
+    
+    st.markdown("""
+    ### Application-Level Security Pattern (This Workshop)
+    
+    ```python
+    # Agent uses admin credentials + RLS filtering in system prompt
+    system_prompt = f\"\"\"Only query WHERE '{persona}' = ANY(persona_access)\"\"\"
+    ```
+    
+    **Why This Pattern:**
+    - ✅ Standard for AI agents (single connection pool)
+    - ✅ Enables cross-tenant analytics
+    - ✅ Works with RDS Data API (no VPC)
+    - ✅ Flexible security rules in code
+    
+    **Trade-offs:**
+    - ⚠️ Agent must be trusted (has admin access)
+    - ⚠️ Security logic in application layer
+    - ⚠️ Requires careful prompt engineering
+    """)
+    
+    st.markdown("""
+    ### Alternative: Database-Level RLS (Traditional)
+    
+    ```sql
+    -- Each user gets their own database role
+    CREATE POLICY tenant_isolation ON knowledge_base
+        USING (tenant_id = current_setting('app.tenant_id'));
+    ```
+    
+    **When to Use:**
+    - ✅ Strict compliance requirements (HIPAA, PCI)
+    - ✅ Direct user database access
+    - ✅ No trusted middleware layer
+    
+    **Trade-offs:**
+    - ⚠️ Connection pooling complexity
+    - ⚠️ Doesn't work with Data API
+    - ⚠️ Limited cross-tenant queries
+    """)
+    
+    st.markdown("---")
+    
+    # Production Checklist
+    st.markdown("## ✅ Production Deployment Checklist")
+    
+    checklist_col1, checklist_col2 = st.columns(2)
+    
+    with checklist_col1:
         st.markdown("""
-        **Aurora PostgreSQL**
-        - [User Guide](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/)
-        - [Best Practices](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.BestPractices.html)
-        - [Performance Insights](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_PerfInsights.html)
+        ### Performance
+        - [ ] HNSW indexes on all vector columns
+        - [ ] GIN indexes on tsvector columns
+        - [ ] Connection pooling (PgBouncer/RDS Proxy)
+        - [ ] Query result caching (Redis/ElastiCache)
+        - [ ] Monitor with Performance Insights
         """)
+    
+    with checklist_col2:
+        st.markdown("""
+        ### Security
+        - [ ] RLS policies for all tables
+        - [ ] IAM authentication for Data API
+        - [ ] Secrets Manager for credentials
+        - [ ] Audit logging enabled
+        - [ ] Network isolation (VPC/Security Groups)
+        """)
+    
+    st.markdown("---")
+    
+    # Next Steps
+    st.markdown("## 🚀 Next Steps")
+    
+    st.markdown("""
+    **Extend This Workshop:**
+    1. Add more search methods (BM25, ColBERT)
+    2. Implement query caching with Redis
+    3. Add A/B testing for reranking strategies
+    4. Integrate with Amazon Kendra for document search
+    5. Build custom MCP tools for your domain
+    
+    **Resources:**
+    - [pgvector GitHub](https://github.com/pgvector/pgvector)
+    - [MCP Specification](https://modelcontextprotocol.io/)
+    - [Aurora Best Practices](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.BestPractices.html)
+    - [Cohere Rerank API](https://docs.cohere.com/docs/rerank)
+    """)
 
 # Footer
 st.markdown("---")
