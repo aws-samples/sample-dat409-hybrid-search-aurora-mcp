@@ -886,7 +886,7 @@ def search_with_mcp_context(
                         ELSE 0.5
                     END as semantic_score,
                     ts_rank(to_tsvector('english', k.content), plainto_tsquery('english', %s)) as text_score
-                FROM knowledge_base k
+                FROM bedrock_integration.knowledge_base k
                 LEFT JOIN bedrock_integration.product_catalog p ON k.product_id = p."productId"
                 WHERE (
                     k.content ILIKE %s
@@ -912,7 +912,7 @@ def search_with_mcp_context(
                     p.imgurl,
                     0.5 as semantic_score,
                     ts_rank(to_tsvector('english', k.content), plainto_tsquery('english', %s)) as text_score
-                FROM knowledge_base k
+                FROM bedrock_integration.knowledge_base k
                 LEFT JOIN bedrock_integration.product_catalog p ON k.product_id = p."productId"
                 WHERE (
                     k.content ILIKE %s
@@ -979,7 +979,7 @@ def strands_agent_search(
 
 IMPORTANT SCHEMA:
 - Main: bedrock_integration.product_catalog ("productId", product_description, category_name, price, stars, reviews, imgurl, embedding)
-- Knowledge: public.knowledge_base (id, product_id, content, content_type, persona_access VARCHAR[], severity, created_at)
+- Knowledge: bedrock_integration.knowledge_base (id, product_id, content, content_type, persona_access VARCHAR[], severity, created_at)
 
 NOTE: persona_access is a PostgreSQL array. Use ARRAY syntax: ARRAY['customer'] or '{{'customer'}}' format.
 
@@ -1289,7 +1289,7 @@ with st.sidebar:
         embedding_count = result[0]
         
         result = conn.execute(
-            "SELECT COUNT(*) FROM knowledge_base"
+            "SELECT COUNT(*) FROM bedrock_integration.knowledge_base"
         ).fetchone()
         kb_count = result[0]
         
