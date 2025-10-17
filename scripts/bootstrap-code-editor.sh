@@ -247,10 +247,15 @@ cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
     "notebook.defaultKernel": "python3",
     "terminal.integrated.defaultProfile.linux": "bash",
     "terminal.integrated.cwd": "/workshop",
+    "terminal.integrated.showOnStartup": "always",
     "files.autoSave": "afterDelay",
     "files.autoSaveDelay": 1000,
     "workbench.startupEditor": "none",
     "git.enabled": false,
+    "git.autofetch": false,
+    "git.autorefresh": false,
+    "git.decorations.enabled": false,
+    "scm.diffDecorations": "none",
     "aws.telemetry": false,
     "amazonQ.telemetry": false,
     "extensions.autoUpdate": false,
@@ -357,6 +362,10 @@ DB_SECRET_ARN='$DB_SECRET_ARN'
 DB_CLUSTER_ARN='$DB_CLUSTER_ARN'
 DATABASE_URL='postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME'
 
+# MCP Configuration (for Streamlit app)
+DATABASE_CLUSTER_ARN='$DB_CLUSTER_ARN'
+DATABASE_SECRET_ARN='$DB_SECRET_ARN'
+
 # PostgreSQL Standard Variables
 PGHOST='$DB_HOST'
 PGPORT='$DB_PORT'
@@ -416,6 +425,29 @@ if [ -f /workshop/.env ]; then
     set -a
     source /workshop/.env
     set +a
+fi
+
+# Welcome message (show once per session)
+if [ -z "\$DAT409_WELCOME_SHOWN" ]; then
+    export DAT409_WELCOME_SHOWN=1
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo "  DAT409 - Hybrid Search with Aurora PostgreSQL for MCP Retrieval"
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo ""
+    echo "🔧 Available Commands:"
+    echo "   lab1      - Navigate to Lab 1 (Hybrid Search)"
+    echo "   lab2      - Navigate to Lab 2 (MCP Agent)"
+    echo "   workshop  - Navigate to /workshop"
+    echo "   psql      - Connect to PostgreSQL database"
+    echo ""
+    echo "📁 Workshop Structure:"
+    echo "   /workshop/lab1-hybrid-search/notebook/  - Lab 1 Jupyter notebook"
+    echo "   /workshop/lab2-mcp-agent/               - Lab 2 Streamlit app"
+    echo "   /workshop/scripts/                      - Setup scripts"
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo ""
 fi
 
 BASHRC_EOF
