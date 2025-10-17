@@ -395,14 +395,28 @@ Resources:
                       chown -R participant:participant "{{ HomeFolder }}"
                       
                       echo "✅ Repository cloned successfully"
-                      echo ""
-                      echo "📘 Next Steps:"
-                      echo "  1. Access Code Editor via CloudFront URL"
-                      echo "  2. Run: cd /workshop && bash scripts/setup-database.sh"
-                      echo "  3. This will load 21,704 products with embeddings (6-9 min)"
                     else
                       echo "WARNING: Repository clone failed"
                     fi
+                  fi
+
+          - name: InstallLabRequirements
+            action: aws:runShellScript
+            inputs:
+              timeoutSeconds: 600
+              runCommand:
+                - '#!/bin/bash'
+                - |
+                  echo "Installing Lab 1 requirements..."
+                  if [ -f "{{ HomeFolder }}/lab1-hybrid-search/requirements.txt" ]; then
+                    sudo -u participant python3.13 -m pip install --user -r "{{ HomeFolder }}/lab1-hybrid-search/requirements.txt"
+                    echo "✅ Lab 1 requirements installed"
+                  fi
+                  
+                  echo "Installing Lab 2 requirements..."
+                  if [ -f "{{ HomeFolder }}/lab2-mcp-agent/requirements.txt" ]; then
+                    sudo -u participant python3.13 -m pip install --user -r "{{ HomeFolder }}/lab2-mcp-agent/requirements.txt"
+                    echo "✅ Lab 2 requirements installed"
                   fi
 
           - name: FinalValidation

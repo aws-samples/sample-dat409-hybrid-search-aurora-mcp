@@ -268,18 +268,18 @@ log "==================== End VS Code Extensions Section ===================="
 
 log "==================== Installing Python Packages ===================="
 
-log "Installing Lab 1 Python dependencies..."
+# Note: Requirements will be installed after repository clone
+log "Core Python packages will be installed..."
+sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user --upgrade pip setuptools wheel
+
+log "Installing essential packages for both labs..."
 sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
-    pandas numpy boto3 psycopg pgvector matplotlib seaborn tqdm pandarallel \
-    jupyterlab jupyter ipywidgets notebook python-dotenv psycopg-binary
+    boto3 psycopg pgvector pandas numpy matplotlib seaborn tqdm \
+    jupyterlab jupyter ipywidgets notebook python-dotenv streamlit plotly pillow requests
 
-check_success "Lab 1 Python package installation"
+check_success "Core Python package installation"
 
-log "Installing Lab 2 Python dependencies..."
-sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
-    streamlit plotly pillow requests
-
-check_success "Lab 2 Python package installation"
+log "Lab-specific requirements.txt will be installed after repository clone"
 
 # Install uv/uvx for MCP
 log "Installing uv/uvx for MCP..."
