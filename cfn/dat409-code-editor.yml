@@ -362,9 +362,9 @@ Resources:
                   DB_NAME="{{ DBName }}" \
                   AWS_REGION="${AWS::Region}" \
                   /tmp/bootstrap-code-editor.sh "{{ CodeEditorPassword }}"
-                  BOOTSTRAP_EXIT_CODE=$$?
+                  BOOTSTRAP_EXIT_CODE=\$?
                   
-                  if [ $$BOOTSTRAP_EXIT_CODE -eq 0 ]; then
+                  if [ \$BOOTSTRAP_EXIT_CODE -eq 0 ]; then
                     echo "✅ Infrastructure bootstrap completed"
                   else
                     echo "❌ Bootstrap failed"
@@ -410,20 +410,20 @@ Resources:
                   
                   # Retrieve database credentials
                   if [ ! -z "{{ DBSecretArn }}" ]; then
-                    DB_SECRET=$$(aws secretsmanager get-secret-value \
+                    DB_SECRET=\$(aws secretsmanager get-secret-value \
                       --secret-id "{{ DBSecretArn }}" \
                       --region ${AWS::Region} \
                       --query SecretString \
                       --output text 2>/dev/null)
                     
-                    if [ ! -z "$$DB_SECRET" ]; then
-                      DB_HOST=$$(echo "$$DB_SECRET" | jq -r '.host // .endpoint // empty')
-                      DB_PORT=$$(echo "$$DB_SECRET" | jq -r '.port // "5432"')
-                      DB_NAME=$$(echo "$$DB_SECRET" | jq -r '.dbname // .database // empty')
-                      DB_USER=$$(echo "$$DB_SECRET" | jq -r '.username // .user // empty')
-                      DB_PASSWORD=$$(echo "$$DB_SECRET" | jq -r '.password // empty')
+                    if [ ! -z "\$DB_SECRET" ]; then
+                      DB_HOST=\$(echo "\$DB_SECRET" | jq -r '.host // .endpoint // empty')
+                      DB_PORT=\$(echo "\$DB_SECRET" | jq -r '.port // "5432"')
+                      DB_NAME=\$(echo "\$DB_SECRET" | jq -r '.dbname // .database // empty')
+                      DB_USER=\$(echo "\$DB_SECRET" | jq -r '.username // .user // empty')
+                      DB_PASSWORD=\$(echo "\$DB_SECRET" | jq -r '.password // empty')
                       
-                      if [ -z "$$DB_HOST" ]; then
+                      if [ -z "\$DB_HOST" ]; then
                         DB_HOST="{{ DBClusterEndpoint }}"
                       fi
                     fi
@@ -431,20 +431,20 @@ Resources:
                   
                   # Create .env file
                   sudo -u participant tee "{{ HomeFolder }}/.env" << EOF
-                  DB_HOST=$$DB_HOST
-                  DB_PORT=$$DB_PORT
-                  DB_NAME=$$DB_NAME
-                  DB_USER=$$DB_USER
-                  DB_PASSWORD=$$DB_PASSWORD
-                  DATABASE_URL=postgresql://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_NAME
+                  DB_HOST=\$DB_HOST
+                  DB_PORT=\$DB_PORT
+                  DB_NAME=\$DB_NAME
+                  DB_USER=\$DB_USER
+                  DB_PASSWORD=\$DB_PASSWORD
+                  DATABASE_URL=postgresql://\$DB_USER:\$DB_PASSWORD@\$DB_HOST:\$DB_PORT/\$DB_NAME
                   DATABASE_SECRET_ARN={{ DBSecretArn }}
                   DATABASE_CLUSTER_ARN={{ DBClusterArn }}
                   AWS_REGION=${AWS::Region}
-                  PGHOST=$$DB_HOST
-                  PGPORT=$$DB_PORT
-                  PGDATABASE=$$DB_NAME
-                  PGUSER=$$DB_USER
-                  PGPASSWORD=$$DB_PASSWORD
+                  PGHOST=\$DB_HOST
+                  PGPORT=\$DB_PORT
+                  PGDATABASE=\$DB_NAME
+                  PGUSER=\$DB_USER
+                  PGPASSWORD=\$DB_PASSWORD
                   EOF
                   
                   chmod 600 "{{ HomeFolder }}/.env"
@@ -452,9 +452,9 @@ Resources:
                   
                   # Create .pgpass
                   sudo -u participant bash -c "cat > /home/participant/.pgpass << PGPASS_EOF
-                  $$DB_HOST:$$DB_PORT:$$DB_NAME:$$DB_USER:$$DB_PASSWORD
-                  $$DB_HOST:$$DB_PORT:*:$$DB_USER:$$DB_PASSWORD
-                  *:*:*:$$DB_USER:$$DB_PASSWORD
+                  \$DB_HOST:\$DB_PORT:\$DB_NAME:\$DB_USER:\$DB_PASSWORD
+                  \$DB_HOST:\$DB_PORT:*:\$DB_USER:\$DB_PASSWORD
+                  *:*:*:\$DB_USER:\$DB_PASSWORD
                   PGPASS_EOF"
                   
                   chmod 600 "/home/participant/.pgpass"
@@ -463,22 +463,22 @@ Resources:
                   # Update bashrc
                   cat >> /home/participant/.bashrc << BASHRC_EOF
                   export AWS_REGION="${AWS::Region}"
-                  export PATH=\$$PATH:/home/participant/.local/bin
+                  export PATH=\$PATH:/home/participant/.local/bin
                   
                   alias workshop="cd {{ HomeFolder }}"
                   alias lab1="cd {{ HomeFolder }}/lab1-hybrid-search"
                   alias lab2="cd {{ HomeFolder }}/lab2-mcp-agent"
                   
-                  export DB_HOST='$$DB_HOST'
-                  export DB_PORT='$$DB_PORT'
-                  export DB_NAME='$$DB_NAME'
-                  export DB_USER='$$DB_USER'
-                  export DB_PASSWORD='$$DB_PASSWORD'
-                  export PGHOST='$$DB_HOST'
-                  export PGPORT='$$DB_PORT'
-                  export PGUSER='$$DB_USER'
-                  export PGPASSWORD='$$DB_PASSWORD'
-                  export PGDATABASE='$$DB_NAME'
+                  export DB_HOST='\$DB_HOST'
+                  export DB_PORT='\$DB_PORT'
+                  export DB_NAME='\$DB_NAME'
+                  export DB_USER='\$DB_USER'
+                  export DB_PASSWORD='\$DB_PASSWORD'
+                  export PGHOST='\$DB_HOST'
+                  export PGPORT='\$DB_PORT'
+                  export PGUSER='\$DB_USER'
+                  export PGPASSWORD='\$DB_PASSWORD'
+                  export PGDATABASE='\$DB_NAME'
                   
                   if [ -f {{ HomeFolder }}/.env ]; then
                     set -a
