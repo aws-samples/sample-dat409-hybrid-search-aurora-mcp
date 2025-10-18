@@ -270,35 +270,9 @@ sudo -u "$CODE_EDITOR_USER" mkdir -p "$HOME_FOLDER/.vscode"
 cat > "$HOME_FOLDER/.vscode/settings.json" << 'WORKSPACE_SETTINGS'
 {
     "terminal.integrated.defaultProfile.linux": "bash",
-    "terminal.integrated.cwd": "/workshop",
-    "task.autoDetect": "on"
+    "terminal.integrated.cwd": "/workshop"
 }
 WORKSPACE_SETTINGS
-
-# Create tasks.json to auto-open terminal on workspace load
-cat > "$HOME_FOLDER/.vscode/tasks.json" << 'TASKS_JSON'
-{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Open Terminal",
-            "type": "shell",
-            "command": ":",
-            "presentation": {
-                "reveal": "always",
-                "panel": "dedicated",
-                "focus": false,
-                "close": false
-            },
-            "runOptions": {
-                "runOn": "folderOpen"
-            },
-            "isBackground": true,
-            "problemMatcher": []
-        }
-    ]
-}
-TASKS_JSON
 
 chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/.vscode"
 
