@@ -1409,56 +1409,14 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "🎓 Key Takeaways"
 ])
 
-# TAB 2: Search Comparison
-with tab2:
-    st.info("ℹ️ **Lab 1 Reference**: These are the search methods you built in the Jupyter notebook. This tab demonstrates how they work together in a production application.")
-    st.markdown("### Compare Search Methods Side-by-Side")
-    st.caption("🚀 See how different search algorithms perform on the same query")
+# TAB 1: MCP Context Search
+with tab1:
+    st.markdown("### MCP Context Search with RLS Policies")
+    st.caption(f"Currently viewing as: **{PERSONAS[selected_persona]['name']}** {PERSONAS[selected_persona]['icon']}")
     
-    with st.expander("🔒 About Row-Level Security (RLS)", expanded=False):
-        st.markdown("""
-        **What is RLS?**  
-        Row-Level Security in PostgreSQL automatically filters results based on your persona.
-        
-        **Implementation Approaches:**
-        - 🧠 **With Strands Agent**: Application-level filtering via system prompt (WHERE '{persona}' = ANY(persona_access))
-          - Agent uses admin access via MCP Data API
-          - Security enforced through AI agent instructions
-          - Standard pattern for AI agents with database access
-        - 🔒 **Without Strands Agent**: Database-level RLS with persona-specific users
-          - Traditional PostgreSQL RLS policies
-          - Enforced at database connection level
-        
-        **Why Application-Level for MCP?**
-        - Data API uses IAM authentication (not database users)
-        - MCP server connects as single admin user
-        - AI agent intelligently applies filtering based on persona context
-        """)
+    st.markdown("---")
     
-    with st.expander("🔍 Search Strategy (Direct Search)", expanded=False):
-        st.markdown("""
-        **When NOT using Strands Agent, the search uses:**
-        
-        1. **Hybrid Search Approach**:
-           - Semantic search (70%): Vector similarity using Cohere embeddings
-           - Keyword search (30%): PostgreSQL full-text search with ts_rank
-        
-        2. **Multi-Table Query**:
-           - Searches `knowledge_base` table (FAQs, tickets, notes, analytics)
-           - Joins with `product_catalog` for related product information
-        
-        3. **RLS Filtering**:
-           - Automatically filters results based on your selected persona
-           - Uses persona-specific database credentials
-        
-        4. **Time Window** (if selected):
-           - Filters results by `created_at` timestamp
-           - Options: 24 hours, 7 days, 30 days, or all time
-        
-        **Note:** This demonstrates traditional database access patterns with RLS enforcement.
-        """)
-    
-    # Quick queries
+    # Quick action buttons with better layout
     st.markdown("**⚡ Quick Try:**")
     mcp_quick_queries_by_persona = {
         'customer': [
@@ -1476,190 +1434,67 @@ with tab2:
             ("analytics", "🔒 Restricted")
         ],
         'product_manager': [
-            ("growth", "✅ Analytics"),
-            ("sales", "✅ Analytics"),
-            ("product launch", "✅ Internal"),
-            ("warranty", "✅ All"),
-            ("revenue", "✅ Analytics")
+            ("analytics", "✅ Analytics"),
+            ("defect rate", "✅ Analytics"),
+            ("warranty", "✅ All Access"),
+            ("firmware", "✅ All Access"),
+            ("maintenance", "✅ All Access")
         ]
     }
-    
     mcp_quick_queries = mcp_quick_queries_by_persona.get(selected_persona, [])
     mcp_quick_cols = st.columns(5)
     for idx, (q, status) in enumerate(mcp_quick_queries):
         with mcp_quick_cols[idx]:
-            is_restricted = "🔒" in status
-            if st.button(f"{'🔒' if is_restricted else '💡'} {q}", key=f"mcp_quick_{idx}", type="secondary" if is_restricted else "primary"):
-                st.session_state.mcp_quick_search = q
+            if st.button(f"{status} {q}", key=f"mcp_quick_{idx}"):
+                st.session_state.mcp_query = q
                 st.rerun()
     
     st.markdown("---")
     
-    use_strands_agent = st.checkbox(
-        "🧠 Use Strands Agent with MCP Tools",
-        value=False,
-        help="AI agent with MCP tools for intelligent database querying"
-    )
+    with st.expander("🔒 About Row-Level Security (RLS)", expanded=False):
+        st.markdown("""
+        **What is RLS?**  
+        Row-Level Security in PostgreSQL automatically filters results based on your persona.
+        
+        **Implementation Approach (This Workshop):**
+        - 🧠 **Application-Level Filtering**: Security enforced via Strands Agent system prompt
+        - Agent uses admin access via MCP Data API
+        - Filtering logic: `WHERE '{persona}' = ANY(persona_access)`
+        - Standard pattern for AI agents with database access
+        
+        **Why Application-Level for MCP?**
+        - Data API uses IAM authentication (not database users)
+        - MCP server connects as single admin user
+        - AI agent intelligently applies filtering based on persona context
+        - Enables cross-tenant analytics while maintaining security
+        """)
     
-    if use_strands_agent:
-        st.caption("💡 MCP Agent uses admin access (via Data API) with application-level security filtering enforced through system prompt. This is the standard production pattern for AI agents - security is maintained through intelligent query construction rather than database-level RLS.")
-    
-    time_window_map = {
-        'All Time': None,
-        'Last 24 Hours': '24h',
-        'Last 7 Days': '7d',
-        'Last 30 Days': '30d'
-    }
-    
-    # Initialize mcp_query if needed
-    if 'mcp_query' not in st.session_state:
-        st.session_state.mcp_query = ''
-    
-    # Handle quick search button clicks
-    if 'mcp_quick_search' in st.session_state:
-        st.session_state.mcp_query = st.session_state.mcp_quick_search
-        del st.session_state.mcp_quick_search
-    
-    mcp_query = st.text_input(
-        "Search Query",
-        placeholder="Enter your search query or question...",
-        key='mcp_query'
-    )
-    
-    mcp_search_button = st.button("🔍 Search MCP Context", type="primary")
-    
-    if mcp_search_button and mcp_query:
-        if use_strands_agent:
-            st.markdown("#### 🧠 Strands Agent Response")
-            
-            with st.spinner("Agent is thinking..."):
-                try:
-                    start_time = time.time()
-                    agent_result = strands_agent_search(mcp_query, selected_persona, use_mcp=True)
-                    elapsed = time.time() - start_time
-                    
-                    if agent_result['error']:
-                        st.error(f"❌ {agent_result['error']}")
-                    else:
-                        # Enhanced stats panel
-                        st.markdown(f"""
-                        <div class="stats-panel">
-                            <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-                                <div>
-                                    <div style="font-size: 1.5rem; font-weight: 600;">🧠 Strands Agent</div>
-                                    <div style="font-size: 0.875rem; opacity: 0.9;">Claude Sonnet 4 + MCP</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 1.5rem; font-weight: 600;">{elapsed*1000:.0f}ms</div>
-                                    <div style="font-size: 0.875rem; opacity: 0.9;">Response Time</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 1.5rem; font-weight: 600;">✅</div>
-                                    <div style="font-size: 0.875rem; opacity: 0.9;">Database Query</div>
-                                </div>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        if agent_result.get('available_tools'):
-                            with st.expander("🔗 MCP Tools Available", expanded=False):
-                                for tool in agent_result['available_tools']:
-                                    st.markdown(f"- `{tool}`")
-                        
-                        # Explain how the agent works
-                        with st.expander("🔍 How It Works", expanded=False):
-                            st.markdown(f"""
-                            **Agent Architecture:**
-                            
-                            1. 🧠 **Strands Agent** receives your natural language query
-                            2. 🤖 **Claude Sonnet 4** analyzes the query and decides which MCP tools to use
-                            3. 🔧 **MCP Tools** execute SQL queries against Aurora PostgreSQL via Data API
-                            4. 📊 **Agent synthesizes** the database results into a natural language response
-                            
-                            **Security Enforcement:**
-                            - ✅ Allowed: {', '.join(PERSONAS[selected_persona]['access_levels'])}
-                            - ❌ Denied: {', '.join([ct for ct in ['product_faq', 'support_ticket', 'internal_note', 'analytics'] if ct not in PERSONAS[selected_persona]['access_levels']]) or 'none'}
-                            - 🔒 Filter: WHERE '{selected_persona}' = ANY(persona_access)
-                            
-                            **Note:** The Strands framework abstracts away tool call details, so SQL queries are not exposed in the response object. However, the agent successfully queries the database to provide accurate answers.
-                            """)
-                        
-                        # Display response
-                        st.markdown("**Response:**")
-                        st.markdown(agent_result['response'])
-                        
-                        st.caption("💡 **Note:** This demo shows a single query response. The MCP architecture can be extended to support multi-turn conversations with chat history and follow-up questions (out of scope for this workshop).")
-                        
-                except Exception as e:
-                    st.error(f"Agent error: {str(e)}")
-        else:
-            # Direct MCP search
-            st.caption("💡 Using hybrid search (semantic + keyword) with RLS filtering. See 'Search Strategy' expander above for details.")
-            with st.spinner(f"Searching as {selected_persona}..."):
-                try:
-                    start_time = time.time()
-                    results = search_with_mcp_context(
-                        mcp_query,
-                        selected_persona,
-                        time_window_map[time_filter],
-                        results_limit * 2
-                    )
-                    elapsed = time.time() - start_time
-                    
-                    st.markdown(f"""
-                    <div class="stats-panel">
-                        <div style="display: flex; justify-content: space-between;">
-                            <div>
-                                <div style="font-size: 2rem; font-weight: 600;">{len(results)}</div>
-                                <div style="font-size: 0.875rem;">Results Found</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 2rem; font-weight: 600;">{elapsed*1000:.0f}ms</div>
-                                <div style="font-size: 0.875rem;">Response Time</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 2rem; font-weight: 600;">{PERSONAS[selected_persona]['icon']}</div>
-                                <div style="font-size: 0.875rem;">{PERSONAS[selected_persona]['name']}</div>
-                            </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    if results:
-                        by_type = {}
-                        for r in results:
-                            content_type = r.get('content_type', 'unknown')
-                            if content_type not in by_type:
-                                by_type[content_type] = []
-                            by_type[content_type].append(r)
-                        
-                        for content_type, items in by_type.items():
-                            with st.expander(f"📁 {content_type.replace('_', ' ').title()} ({len(items)})", expanded=True):
-                                for item in items:
-                                    render_knowledge_card(item, show_persona=True)
-                    else:
-                        show_empty_state(f"No results found for '{mcp_query}'", "🔍")
-                        
-                except Exception as e:
-                    st.error(f"Search error: {str(e)}")
-
-
-# TAB 1: MCP Context Search
-with tab1:
-    st.markdown("### MCP Context Search with RLS Policies")
-    st.caption(f"Currently viewing as: **{PERSONAS[selected_persona]['name']}** {PERSONAS[selected_persona]['icon']}")
-    
-    st.markdown("---")
-    
-    # Quick action buttons with better layout
-    st.markdown("**⚡ Quick Try:**")
-    quick_cols = st.columns(5)
-    quick_queries = ["wireless headphones", "security camera", "robot vacuum", "smart doorbell", "laptop"]
-    for idx, q in enumerate(quick_queries):
-        with quick_cols[idx]:
-            if st.button(f"💡 {q}", key=f"quick_{idx}"):
-                st.session_state.quick_search = q
-                st.rerun()
+    with st.expander("🤝 Why Strands + MCP?", expanded=False):
+        st.markdown("""
+        **Strands Agent Framework:**
+        - AI agent orchestration with tool-calling capabilities
+        - Memory management for multi-turn conversations
+        - Built-in support for MCP protocol
+        
+        **Model Context Protocol (MCP):**
+        - Standardized protocol for AI agents to access external tools
+        - Provides database access tools (query, schema inspection)
+        - Enables intelligent, context-aware database queries
+        
+        **Why This Combination?**
+        - ✅ **Natural Language → SQL**: Agent translates questions into appropriate database queries
+        - ✅ **Intelligent Tool Selection**: Agent chooses the right MCP tools based on query intent
+        - ✅ **Context-Aware**: Agent understands persona restrictions and applies them automatically
+        - ✅ **Serverless Access**: Uses Aurora Data API (no VPC required)
+        - ✅ **Production Pattern**: Standard approach for AI agents with database access
+        
+        **Architecture:**
+        ```
+        User Query → Strands Agent (Claude Sonnet 4) → MCP Tools → Aurora PostgreSQL
+                         ↓                              ↓                ↓
+                   Tool Selection                  MCP Protocol      RLS-Filtered Results
+        ```
+        """)
     
     st.markdown("---")
     
@@ -1670,7 +1505,7 @@ with tab1:
             "✨ Use Cohere Rerank",
             value=False,
             key='use_rerank',
-            help="Apply Cohere's reranking model for better relevance"
+            help="Applies Cohere's ML-based reranking model to re-score and re-order results from all search methods. Uses transformer neural network trained on query-document relevance pairs for superior accuracy (~50-200ms latency). Best for production search where relevance is critical."
         )
     with col2:
         show_all = st.checkbox("📊 Show All", value=False, key='show_all')
@@ -1834,6 +1669,115 @@ with tab1:
 
 
 # TAB 3: Advanced Analysis
+
+# TAB 2: Search Comparison
+with tab2:
+    st.info("ℹ️ **Lab 1 Reference**: These are the search methods you built in the Jupyter notebook. This tab demonstrates how they work together in a production application.")
+    st.markdown("### Compare Search Methods Side-by-Side")
+    st.caption("🚀 See how different search algorithms perform on the same query")
+    
+    # Quick queries
+    st.markdown("**⚡ Quick Try:**")
+    quick_cols = st.columns(5)
+    quick_queries = ["wireless headphones", "security camera", "robot vacuum", "smart doorbell", "laptop"]
+    for idx, q in enumerate(quick_queries):
+        with quick_cols[idx]:
+            if st.button(f"💡 {q}", key=f"search_quick_{idx}"):
+                st.session_state.comparison_query = q
+                st.rerun()
+    
+    st.markdown("---")
+    
+    st.info("🧠 **Using Strands Agent with MCP Tools** - AI agent with intelligent database querying via MCP protocol. Security is enforced through application-level filtering in the system prompt (standard production pattern for AI agents).")
+    
+    time_window_map = {
+        'All Time': None,
+        'Last 24 Hours': '24h',
+        'Last 7 Days': '7d',
+        'Last 30 Days': '30d'
+    }
+    
+    # Initialize mcp_query if needed
+    if 'mcp_query' not in st.session_state:
+        st.session_state.mcp_query = ''
+    
+    # Handle quick search button clicks
+    if 'mcp_quick_search' in st.session_state:
+        st.session_state.mcp_query = st.session_state.mcp_quick_search
+        del st.session_state.mcp_quick_search
+    
+    mcp_query = st.text_input(
+        "Search Query",
+        placeholder="Enter your search query or question...",
+        key='mcp_query'
+    )
+    
+    mcp_search_button = st.button("🔍 Search MCP Context", type="primary")
+    
+    if mcp_search_button and mcp_query:
+        st.markdown("#### 🧠 Strands Agent Response")
+        
+        with st.spinner("Agent is thinking..."):
+            try:
+                start_time = time.time()
+                agent_result = strands_agent_search(mcp_query, selected_persona, use_mcp=True)
+                elapsed = time.time() - start_time
+                
+                if agent_result['error']:
+                    st.error(f"❌ {agent_result['error']}")
+                else:
+                    # Enhanced stats panel
+                        st.markdown(f"""
+                        <div class="stats-panel">
+                            <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: 600;">🧠 Strands Agent</div>
+                                    <div style="font-size: 0.875rem; opacity: 0.9;">Claude Sonnet 4 + MCP</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: 600;">{elapsed*1000:.0f}ms</div>
+                                    <div style="font-size: 0.875rem; opacity: 0.9;">Response Time</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: 600;">✅</div>
+                                    <div style="font-size: 0.875rem; opacity: 0.9;">Database Query</div>
+                                </div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        if agent_result.get('available_tools'):
+                            with st.expander("🔗 MCP Tools Available", expanded=False):
+                                for tool in agent_result['available_tools']:
+                                    st.markdown(f"- `{tool}`")
+                        
+                        # Explain how the agent works
+                        with st.expander("🔍 How It Works", expanded=False):
+                            st.markdown(f"""
+                            **Agent Architecture:**
+                            
+                            1. 🧠 **Strands Agent** receives your natural language query
+                            2. 🤖 **Claude Sonnet 4** analyzes the query and decides which MCP tools to use
+                            3. 🔧 **MCP Tools** execute SQL queries against Aurora PostgreSQL via Data API
+                            4. 📊 **Agent synthesizes** the database results into a natural language response
+                            
+                            **Security Enforcement:**
+                            - ✅ Allowed: {', '.join(PERSONAS[selected_persona]['access_levels'])}
+                            - ❌ Denied: {', '.join([ct for ct in ['product_faq', 'support_ticket', 'internal_note', 'analytics'] if ct not in PERSONAS[selected_persona]['access_levels']]) or 'none'}
+                            - 🔒 Filter: WHERE '{selected_persona}' = ANY(persona_access)
+                            
+                            **Note:** The Strands framework abstracts away tool call details, so SQL queries are not exposed in the response object. However, the agent successfully queries the database to provide accurate answers.
+                            """)
+                        
+                        # Display response
+                        st.markdown("**Response:**")
+                        st.markdown(agent_result['response'])
+                        
+                        st.caption("💡 **Note:** This demo shows a single query response. The MCP architecture can be extended to support multi-turn conversations with chat history and follow-up questions (out of scope for this workshop).")
+                
+            except Exception as e:
+                st.error(f"Agent error: {str(e)}")
+
 with tab3:
     st.markdown("### 🔬 Advanced Analysis & Optimization")
     st.caption("🎯 Deep dive into query analysis, result overlap, and index configuration")
@@ -1929,15 +1873,6 @@ LIMIT 10;
         search_query = st.session_state.comparison_query
         word_count = len(search_query.split())
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Words", word_count)
-        with col2:
-            st.metric("Characters", len(search_query))
-        with col3:
-            query_type = "Phrase" if word_count > 3 else "Keywords"
-            st.metric("Type", query_type)
-        
         # Recommended search method
         if word_count == 1:
             recommendation = "**Fuzzy Search** - Single word benefits from typo tolerance"
@@ -1951,40 +1886,6 @@ LIMIT 10;
         st.info(f"🎯 {recommendation}")
     else:
         st.info("👉 Run a search in Tab 2 to see query analysis")
-    
-    # Section 2: Result Overlap Analysis (Condensed)
-    st.markdown("---")
-    st.markdown("## 📊 Result Overlap Analysis")
-    
-    # Get product IDs from each method
-    method_results = {}
-    for method_name in ['Keyword', 'Fuzzy', 'Semantic', 'Hybrid']:
-        if f'results_{method_name}' in st.session_state:
-            method_results[method_name] = set(
-                r['productId'] for r in st.session_state[f'results_{method_name}']
-            )
-    
-    if len(method_results) >= 2:
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Total Unique", len(set().union(*method_results.values())))
-        with col2:
-            common_all = set.intersection(*method_results.values()) if method_results else set()
-            st.metric("In All Methods", len(common_all))
-        with col3:
-            overlaps = []
-            methods = list(method_results.keys())
-            for i in range(len(methods)):
-                for j in range(i+1, len(methods)):
-                    overlap = len(method_results[methods[i]] & method_results[methods[j]])
-                    overlaps.append(overlap)
-            avg_overlap = sum(overlaps) / len(overlaps) if overlaps else 0
-            st.metric("Avg Overlap", f"{avg_overlap:.1f}")
-        
-        st.info("💡 High overlap = methods agree on relevance. Low overlap = methods find different aspects.")
-    else:
-        st.info("👉 Run a search in Tab 2 to see overlap analysis")
     
     # Section 3: Index Configuration (Condensed)
     st.markdown("---")
