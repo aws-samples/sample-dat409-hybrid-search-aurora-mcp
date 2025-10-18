@@ -319,10 +319,15 @@ st.markdown("""
         color: white; 
         box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
     }
-    .badge-hybrid { 
+    .badge-hybrid, .badge-hybrid-\(weighted\) { 
         background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); 
         color: white; 
         box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+    }
+    .badge-hybrid-\(rrf\) { 
+        background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); 
+        color: white; 
+        box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3);
     }
     
     /* Animated score bar */
@@ -840,7 +845,7 @@ def hybrid_search(
     for pid, score in sorted_products:
         product = product_data[pid].copy()
         product['score'] = score
-        product['method'] = 'Hybrid'
+        product['method'] = 'Hybrid (Weighted)'
         results.append(product)
     
     return results
@@ -1107,6 +1112,43 @@ def rerank_results(query: str, results: List[Dict], top_k: int = 5) -> List[Dict
     except Exception as e:
         logger.error(f"Reranking failed: {e}")
         return results[:top_k]
+
+def rrf_search(query: str, k: int = 60, limit: int = 10, persona: str = None) -> List[Dict]:
+    """Reciprocal Rank Fusion combining semantic, keyword, and fuzzy search"""
+    semantic_results = semantic_search(query, limit * 2, persona)
+    keyword_results = keyword_search(query, limit * 2, persona)
+    fuzzy_results = fuzzy_search(query, limit * 2, persona)
+    
+    product_scores = {}
+    product_data = {}
+    
+    for rank, result in enumerate(semantic_results, 1):
+        pid = result['productId']
+        product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (k + rank)
+        product_data[pid] = result
+    
+    for rank, result in enumerate(keyword_results, 1):
+        pid = result['productId']
+        product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (k + rank)
+        if pid not in product_data:
+            product_data[pid] = result
+    
+    for rank, result in enumerate(fuzzy_results, 1):
+        pid = result['productId']
+        product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (k + rank)
+        if pid not in product_data:
+            product_data[pid] = result
+    
+    sorted_products = sorted(product_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
+    
+    results = []
+    for pid, score in sorted_products:
+        product = product_data[pid].copy()
+        product['score'] = score
+        product['method'] = 'Hybrid (RRF)'
+        results.append(product)
+    
+    return results
 
 # ============================================================================
 # ENHANCED UI COMPONENTS
@@ -1599,6 +1641,12 @@ with tab2:
     st.markdown("**⚡ Quick Try:**")
     quick_cols = st.columns(5)
     quick_queries = ["wireless headphones", "security camera", "robot vacuum", "smart doorbell", "laptop"]
+    for idx, q in enumerate(quick_queries):
+        with quick_cols[idx]:
+            if st.button(f"💡 {q}", key=f"search_quick_{idx}"):
+                st.session_state.comparison_query = q
+                st.rerun()
+    
     st.markdown("---")
     
     # Options row
@@ -1661,7 +1709,7 @@ with tab2:
     
     if search_button and search_query:
         # Create columns first
-        cols = st.columns(4)
+        cols = st.columns(5)
         
         # Perform actual search with spinner
         with st.spinner("🔍 Searching across all methods..."):
@@ -1670,7 +1718,8 @@ with tab2:
                 ('Keyword', lambda q: keyword_search(q, results_limit, selected_persona)),
                 ('Fuzzy', lambda q: fuzzy_search(q, results_limit, selected_persona)),
                 ('Semantic', lambda q: semantic_search(q, results_limit, selected_persona)),
-                ('Hybrid', lambda q: hybrid_search(q, semantic_weight, keyword_weight, results_limit, selected_persona))
+                ('Hybrid (Weighted)', lambda q: hybrid_search(q, semantic_weight, keyword_weight, results_limit, selected_persona)),
+                ('Hybrid (RRF)', lambda q: rrf_search(q, 60, results_limit, selected_persona))
             ]
         
         for idx, (method_name, method_func) in enumerate(methods):
