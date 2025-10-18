@@ -1,18 +1,5 @@
 """
 DAT409: Aurora PostgreSQL Hybrid Search with MCP
-Enhanced Streamlit Application - 400 Level (UI ENHANCED VERSION)
-
-NEW UI FEATURES:
-- Animated gradient backgrounds with floating particles
-- Skeleton loading states for better UX
-- Enhanced product cards with smooth animations
-- Search bar with auto-suggestions
-- Animated metrics with count-up effects
-- Better empty states with actionable suggestions
-- Toast notifications for user actions
-- Collapsible sidebar sections
-- Quick view modals for products
-- Enhanced result cards with expand/collapse
 """
 
 import streamlit as st
@@ -29,6 +16,10 @@ from dotenv import load_dotenv
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+import asyncio
+import concurrent.futures
+import re
+from io import StringIO, BytesIO
 
 # MCP and Strands imports
 from mcp import stdio_client, StdioServerParameters
@@ -54,7 +45,7 @@ st.set_page_config(
 )
 
 # ============================================================================
-# ENHANCED DARK THEME STYLING
+# ENHANCED DARK THEME STYLING (Same as original, plus new styles)
 # ============================================================================
 
 st.markdown("""
@@ -281,6 +272,15 @@ st.markdown("""
         margin: 0.5rem 0;
     }
     
+    /* Highlight matched terms */
+    .highlight {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+        padding: 0.1rem 0.3rem;
+        border-radius: 3px;
+        font-weight: 600;
+        color: #00D9FF;
+    }
+    
     /* Enhanced method badges */
     .method-badge {
         display: inline-block;
@@ -319,12 +319,12 @@ st.markdown("""
         color: white; 
         box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
     }
-    .badge-hybrid, .badge-hybrid-\(weighted\) { 
+    .badge-hybrid, .badge-hybrid-\\(weighted\\) { 
         background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); 
         color: white; 
         box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
     }
-    .badge-hybrid-\(rrf\) { 
+    .badge-hybrid-\\(rrf\\) { 
         background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); 
         color: white; 
         box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3);
@@ -388,6 +388,55 @@ st.markdown("""
         }
     }
     
+    /* SQL code block styling */
+    .sql-block {
+        background: #0a0a0a;
+        border: 1px solid #333333;
+        border-left: 4px solid #667eea;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 0.875rem;
+        color: #E0E0E0;
+        overflow-x: auto;
+    }
+    
+    /* Keyboard shortcut hint */
+    .kbd {
+        background: #1a1a1a;
+        border: 1px solid #333333;
+        border-radius: 4px;
+        padding: 0.2rem 0.5rem;
+        font-family: monospace;
+        font-size: 0.75rem;
+        color: #B0B0B0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Progress indicator */
+    .progress-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    .progress-running {
+        background: #f59e0b;
+    }
+    
+    .progress-complete {
+        background: #10b981;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
     /* Skeleton loader for loading states */
     .skeleton {
         background: linear-gradient(90deg, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%);
@@ -403,11 +452,6 @@ st.markdown("""
     
     .skeleton-card {
         height: 150px;
-        margin: 0.5rem 0;
-    }
-    
-    .skeleton-text {
-        height: 20px;
         margin: 0.5rem 0;
     }
     
@@ -516,7 +560,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# CONFIGURATION & CONSTANTS (Same as original)
+# CONFIGURATION & CONSTANTS
 # ============================================================================
 
 # Database configuration
@@ -591,9 +635,7 @@ SAMPLE_QUERIES = {
 }
 
 # ============================================================================
-# HELPER FUNCTIONS FOR ALL ORIGINAL FUNCTIONALITY
-# (Copy all the functions from original: get_bedrock_client, get_mcp_client, 
-# get_db_connection, generate_embedding, all search functions, etc.)
+# HELPER FUNCTIONS
 # ============================================================================
 
 @st.cache_resource
@@ -686,6 +728,215 @@ def generate_embedding(text: str, input_type: str = "search_query") -> Optional[
         logger.error(f"Embedding generation failed: {e}")
     
     return None
+
+def highlight_text(text: str, query: str) -> str:
+    """Highlight query terms in text"""
+    if not query or not text:
+        return text
+    
+    # Split query into words and escape special regex characters
+    words = [re.escape(word.strip()) for word in query.lower().split() if word.strip()]
+    if not words:
+        return text
+    
+    # Create pattern to match any of the words (case insensitive)
+    pattern = '|'.join(words)
+    
+    # Replace matches with highlighted version
+    def replace_match(match):
+        return f'<span class="highlight">{match.group(0)}</span>'
+    
+    try:
+        highlighted = re.sub(f'({pattern})', replace_match, text, flags=re.IGNORECASE)
+        return highlighted
+    except:
+        return text
+
+def get_sql_explanation(method: str, query: str) -> str:
+    """Get SQL query explanation for a search method"""
+    explanations = {
+        'Keyword': f"""
+```sql
+-- Full-Text Search with ts_rank scoring
+SELECT 
+    "productId",
+    product_description,
+    category_name,
+    price,
+    stars,
+    reviews,
+    imgurl,
+    producturl,
+    ts_rank_cd(
+        to_tsvector('english', product_description), 
+        plainto_tsquery('english', '{query}')
+    ) as rank
+FROM bedrock_integration.product_catalog
+WHERE to_tsvector('english', product_description) 
+      @@ plainto_tsquery('english', '{query}')
+ORDER BY rank DESC
+LIMIT 10;
+```
+
+**How it works:**
+- Uses PostgreSQL's built-in full-text search
+- `to_tsvector()` converts text to searchable tokens (stemming + stop words)
+- `plainto_tsquery()` converts query to search terms
+- `ts_rank_cd()` scores results by term frequency and position
+- GIN index accelerates the search
+""",
+        'Semantic': f"""
+```sql
+-- Vector Similarity Search with pgvector
+SELECT 
+    "productId",
+    product_description,
+    category_name,
+    price,
+    stars,
+    reviews,
+    imgurl,
+    producturl,
+    1 - (embedding <=> $1::vector) as similarity
+FROM bedrock_integration.product_catalog
+WHERE embedding IS NOT NULL
+ORDER BY embedding <=> $1::vector
+LIMIT 10;
+```
+
+**How it works:**
+- Generates 1024-dim embedding for query: `{query[:50]}...`
+- `<=>` operator computes cosine distance between vectors
+- `1 - distance` converts to similarity score (0-1)
+- HNSW index enables sub-100ms search on millions of vectors
+- Uses Cohere embed-english-v3 model via Bedrock
+""",
+        'Fuzzy': f"""
+```sql
+-- Trigram Similarity Search
+SET pg_trgm.similarity_threshold = 0.1;
+
+SELECT 
+    "productId",
+    product_description,
+    category_name,
+    price,
+    stars,
+    reviews,
+    imgurl,
+    producturl,
+    similarity(lower(product_description), lower('{query}')) as sim
+FROM bedrock_integration.product_catalog
+WHERE lower(product_description) %% lower('{query}')
+ORDER BY sim DESC
+LIMIT 10;
+```
+
+**How it works:**
+- `%%` operator performs trigram similarity matching
+- Breaks text into 3-character sequences ("wireless" → "wir", "ire", "rel", etc.)
+- Compares overlap between query and document trigrams
+- Threshold 0.1 = 10% overlap required to match
+- GIN trigram index accelerates fuzzy matching
+- Excellent for typo tolerance
+""",
+        'Hybrid (Weighted)': f"""
+```sql
+-- Weighted Score Fusion (Semantic + Keyword)
+WITH semantic_scores AS (
+    SELECT 
+        "productId",
+        1 - (embedding <=> $1::vector) as semantic_score
+    FROM bedrock_integration.product_catalog
+    WHERE embedding IS NOT NULL
+    ORDER BY embedding <=> $1::vector
+    LIMIT 20
+),
+keyword_scores AS (
+    SELECT 
+        "productId",
+        ts_rank_cd(
+            to_tsvector('english', product_description),
+            plainto_tsquery('english', '{query}')
+        ) as keyword_score
+    FROM bedrock_integration.product_catalog
+    WHERE to_tsvector('english', product_description) 
+          @@ plainto_tsquery('english', '{query}')
+    LIMIT 20
+)
+SELECT 
+    COALESCE(s."productId", k."productId") as "productId",
+    (COALESCE(s.semantic_score, 0) * 0.7) + 
+    (COALESCE(k.keyword_score, 0) * 0.3) as combined_score
+FROM semantic_scores s
+FULL OUTER JOIN keyword_scores k USING ("productId")
+ORDER BY combined_score DESC
+LIMIT 10;
+```
+
+**How it works:**
+- Runs semantic and keyword searches in parallel
+- Normalizes scores to same scale
+- Weighted fusion: 70% semantic + 30% keyword
+- Combines strengths of both approaches
+""",
+        'Hybrid (RRF)': f"""
+```sql
+-- Reciprocal Rank Fusion (Score-agnostic)
+WITH semantic_ranks AS (
+    SELECT 
+        "productId",
+        ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) as rank
+    FROM bedrock_integration.product_catalog
+    WHERE embedding IS NOT NULL
+),
+keyword_ranks AS (
+    SELECT 
+        "productId",
+        ROW_NUMBER() OVER (
+            ORDER BY ts_rank_cd(
+                to_tsvector('english', product_description),
+                plainto_tsquery('english', '{query}')
+            ) DESC
+        ) as rank
+    FROM bedrock_integration.product_catalog
+    WHERE to_tsvector('english', product_description) 
+          @@ plainto_tsquery('english', '{query}')
+),
+fuzzy_ranks AS (
+    SELECT 
+        "productId",
+        ROW_NUMBER() OVER (
+            ORDER BY similarity(
+                lower(product_description), 
+                lower('{query}')
+            ) DESC
+        ) as rank
+    FROM bedrock_integration.product_catalog
+    WHERE lower(product_description) %% lower('{query}')
+)
+SELECT 
+    COALESCE(s."productId", k."productId", f."productId") as "productId",
+    (1.0 / (60 + COALESCE(s.rank, 1000))) +
+    (1.0 / (60 + COALESCE(k.rank, 1000))) +
+    (1.0 / (60 + COALESCE(f.rank, 1000))) as rrf_score
+FROM semantic_ranks s
+FULL OUTER JOIN keyword_ranks k USING ("productId")
+FULL OUTER JOIN fuzzy_ranks f USING ("productId")
+ORDER BY rrf_score DESC
+LIMIT 10;
+```
+
+**How it works:**
+- Rank-based fusion (not score-based)
+- Formula: `score = Σ(1 / (k + rank))` where k=60
+- Combines semantic, keyword, AND fuzzy search
+- Robust to different score scales
+- No normalization needed
+"""
+    }
+    
+    return explanations.get(method, "SQL query not available")
 
 def keyword_search(query: str, limit: int = 10, persona: str = None) -> List[Dict]:
     """PostgreSQL Full-Text Search"""
@@ -819,18 +1070,14 @@ def hybrid_search(
     total = semantic_weight + keyword_weight
     semantic_weight = semantic_weight / total
     keyword_weight = keyword_weight / total
-    
     semantic_results = semantic_search(query, limit * 2, persona)
     keyword_results = keyword_search(query, limit * 2, persona)
-    
     product_scores = {}
     product_data = {}
-    
     for result in semantic_results:
         pid = result['productId']
         product_scores[pid] = result['score'] * semantic_weight
         product_data[pid] = result
-    
     for result in keyword_results:
         pid = result['productId']
         if pid in product_scores:
@@ -838,120 +1085,76 @@ def hybrid_search(
         else:
             product_scores[pid] = result['score'] * keyword_weight
             product_data[pid] = result
-    
     sorted_products = sorted(product_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
-    
     results = []
     for pid, score in sorted_products:
         product = product_data[pid].copy()
         product['score'] = score
         product['method'] = 'Hybrid (Weighted)'
         results.append(product)
-    
     return results
 
-def search_with_mcp_context(
-    query: str,
-    persona: str,
-    time_window: Optional[str] = None,
-    limit: int = 10
-) -> List[Dict]:
-    """Search with MCP context and RLS policies"""
-    conn = get_db_connection(persona)
-    
-    try:
-        query_embedding = generate_embedding(query, "search_query")
-        
-        time_filter = ""
-        if time_window:
-            if time_window == "24h":
-                time_filter = "AND k.created_at >= NOW() - INTERVAL '24 hours'"
-            elif time_window == "7d":
-                time_filter = "AND k.created_at >= NOW() - INTERVAL '7 days'"
-            elif time_window == "30d":
-                time_filter = "AND k.created_at >= NOW() - INTERVAL '30 days'"
-        
-        if query_embedding:
-            results = conn.execute(f"""
-                SELECT 
-                    k.id,
-                    k.content,
-                    k.content_type,
-                    k.severity,
-                    k.created_at,
-                    k.product_id,
-                    p.product_description,
-                    p.price,
-                    p.stars,
-                    p.reviews,
-                    p.imgurl,
-                    CASE 
-                        WHEN p.embedding IS NOT NULL THEN
-                            1 - (p.embedding <=> %s::vector)
-                        ELSE 0.5
-                    END as semantic_score,
-                    ts_rank(to_tsvector('english', k.content), plainto_tsquery('english', %s)) as text_score
-                FROM bedrock_integration.knowledge_base k
-                LEFT JOIN bedrock_integration.product_catalog p ON k.product_id = p."productId"
-                WHERE (
-                    k.content ILIKE %s
-                    OR p.product_description ILIKE %s
-                )
-                {time_filter}
-                ORDER BY semantic_score DESC, text_score DESC
-                LIMIT %s;
-            """, (query_embedding, query, f'%{query}%', f'%{query}%', limit)).fetchall()
-        else:
-            results = conn.execute(f"""
-                SELECT 
-                    k.id,
-                    k.content,
-                    k.content_type,
-                    k.severity,
-                    k.created_at,
-                    k.product_id,
-                    p.product_description,
-                    p.price,
-                    p.stars,
-                    p.reviews,
-                    p.imgurl,
-                    0.5 as semantic_score,
-                    ts_rank(to_tsvector('english', k.content), plainto_tsquery('english', %s)) as text_score
-                FROM bedrock_integration.knowledge_base k
-                LEFT JOIN bedrock_integration.product_catalog p ON k.product_id = p."productId"
-                WHERE (
-                    k.content ILIKE %s
-                    OR p.product_description ILIKE %s
-                )
-                {time_filter}
-                ORDER BY text_score DESC
-                LIMIT %s;
-            """, (query, f'%{query}%', f'%{query}%', limit)).fetchall()
-        
-        return [{
-            'id': r[0],
-            'content': r[1],
-            'content_type': r[2],
-            'severity': r[3],
-            'created_at': r[4].isoformat() if r[4] else None,
-            'product_id': r[5],
-            'product_description': r[6],
-            'price': float(r[7]) if r[7] else 0,
-            'stars': float(r[8]) if r[8] else 0,
-            'reviews': int(r[9]) if r[9] else 0,
-            'imgUrl': r[10],
-            'semantic_score': float(r[11]) if r[11] else 0,
-            'text_score': float(r[12]) if r[12] else 0,
-            'combined_score': (float(r[11]) if r[11] else 0) * 0.7 + (float(r[12]) if r[12] else 0) * 0.3
-        } for r in results]
-    finally:
-        conn.close()
+def rrf_search(query: str, k: int = 60, limit: int = 10, persona: str = None) -> List[Dict]:
+    """Reciprocal Rank Fusion combining semantic, keyword, and fuzzy search"""
+    semantic_results = semantic_search(query, limit * 2, persona)
+    keyword_results = keyword_search(query, limit * 2, persona)
+    fuzzy_results = fuzzy_search(query, limit * 2, persona)
+    product_scores = {}
+    product_data = {}
+    for rank, result in enumerate(semantic_results, 1):
+        pid = result['productId']
+        product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (k + rank)
+        product_data[pid] = result
+    for rank, result in enumerate(keyword_results, 1):
+        pid = result['productId']
+        product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (k + rank)
+        if pid not in product_data:
+            product_data[pid] = result
+    for rank, result in enumerate(fuzzy_results, 1):
+        pid = result['productId']
+        product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (k + rank)
+        if pid not in product_data:
+            product_data[pid] = result
+    sorted_products = sorted(product_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
+    results = []
+    for pid, score in sorted_products:
+        product = product_data[pid].copy()
+        product['score'] = score
+        product['method'] = 'Hybrid (RRF)'
+        results.append(product)
+    return results
 
-def strands_agent_search(
-    query: str,
-    persona: str = None,
-    use_mcp: bool = True
-) -> Dict[str, Any]:
+def rerank_results(query: str, results: List[Dict], top_k: int = 5) -> List[Dict]:
+    """Re-rank search results using Cohere"""
+    if not results:
+        return []
+    try:
+        documents = [r.get('description', r.get('content', '')) for r in results]
+        body = json.dumps({
+            "api_version": 2,
+            "query": query,
+            "documents": documents,
+            "top_n": min(top_k, len(documents))
+        })
+        response = bedrock_runtime.invoke_model(
+            modelId='cohere.rerank-v3-5:0',
+            body=body,
+            accept='application/json',
+            contentType='application/json'
+        )
+        response_body = json.loads(response['body'].read())
+        reranked = []
+        for item in response_body.get('results', []):
+            idx = item['index']
+            result = results[idx].copy()
+            result['rerank_score'] = item['relevance_score']
+            reranked.append(result)
+        return reranked
+    except Exception as e:
+        logger.error(f"Reranking failed: {e}")
+        return results[:top_k]
+
+def strands_agent_search(query: str, persona: str = None, use_mcp: bool = True) -> Dict[str, Any]:
     """Use Strands Agent with MCP tools"""
     if not use_mcp:
         return {
@@ -959,28 +1162,21 @@ def strands_agent_search(
             'method': 'direct',
             'error': 'MCP client not configured'
         }
-    
     mcp_client = get_mcp_client()
-    
     if not mcp_client:
         return {
             'response': 'MCP client not configured.',
             'method': 'error',
             'error': 'Missing MCP configuration'
         }
-    
     try:
         try:
             mcp_client.start()
         except:
             pass
-        
         tools = mcp_client.list_tools_sync()
-            
-        # Calculate denied content types
         all_content_types = ['product_faq', 'support_ticket', 'internal_note', 'analytics']
         denied_types = [ct for ct in all_content_types if ct not in PERSONAS[persona]['access_levels']]
-        
         agent = Agent(
             tools=tools,
             model="us.anthropic.claude-sonnet-4-20250514-v1:0",
@@ -1002,53 +1198,14 @@ SECURITY RESTRICTIONS:
 
 Provide responses only from your authorized knowledge_base content."""
         )
-        
         start_time = time.time()
         response = agent(query)
         elapsed = time.time() - start_time
-        
-        # Extract response text
         if hasattr(response, 'message') and isinstance(response.message, dict):
             content = response.message.get('content', [])
             response_text = content[0].get('text', str(content)) if content else str(response)
         else:
             response_text = str(response)
-        
-        tools_used = []
-        
-        # Try multiple ways to extract tool calls
-        # Method 1: Check response.tool_calls
-        if hasattr(response, 'tool_calls') and response.tool_calls:
-            for tool in response.tool_calls:
-                tool_name = getattr(tool, 'name', str(tool))
-                tools_used.append(tool_name)
-                
-
-        
-        # Method 2: Check response.message for tool_use blocks
-        if hasattr(response, 'message') and isinstance(response.message, dict):
-            content = response.message.get('content', [])
-            for block in content:
-                if isinstance(block, dict):
-                    if block.get('type') == 'tool_use':
-                        tool_name = block.get('name', 'unknown')
-                        tools_used.append(tool_name)
-        
-        # Method 3: Check response.state (it's a dict)
-        if hasattr(response, 'state') and isinstance(response.state, dict):
-            # Check for messages in state
-            if 'messages' in response.state:
-                messages = response.state['messages']
-                for msg in messages:
-                    if isinstance(msg, dict) and 'content' in msg:
-                        content = msg['content']
-                        if isinstance(content, list):
-                            for block in content:
-                                if isinstance(block, dict) and block.get('type') == 'tool_use':
-                                    tool_name = block.get('name', 'unknown')
-                                    tools_used.append(tool_name)
-
-        
         available_tool_names = []
         if tools:
             for tool in tools:
@@ -1058,9 +1215,6 @@ Provide responses only from your authorized knowledge_base content."""
                     available_tool_names.append(tool.mcp_tool.name)
                 elif hasattr(tool, 'name'):
                     available_tool_names.append(tool.name)
-        
-        tools_used = list(dict.fromkeys(tools_used))
-        
         return {
             'response': response_text,
             'method': 'strands_mcp',
@@ -1068,7 +1222,6 @@ Provide responses only from your authorized knowledge_base content."""
             'available_tools': available_tool_names,
             'error': None
         }
-            
     except Exception as e:
         logger.error(f"Strands Agent error: {e}")
         return {
@@ -1077,91 +1230,81 @@ Provide responses only from your authorized knowledge_base content."""
             'error': str(e)
         }
 
-def rerank_results(query: str, results: List[Dict], top_k: int = 5) -> List[Dict]:
-    """Re-rank search results using Cohere"""
-    if not results:
-        return []
-    
-    try:
-        documents = [r.get('description', r.get('content', '')) for r in results]
-        
-        body = json.dumps({
-            "api_version": 2,
-            "query": query,
-            "documents": documents,
-            "top_n": min(top_k, len(documents))
-        })
-        
-        response = bedrock_runtime.invoke_model(
-            modelId='cohere.rerank-v3-5:0',
-            body=body,
-            accept='application/json',
-            contentType='application/json'
-        )
-        
-        response_body = json.loads(response['body'].read())
-        
-        reranked = []
-        for item in response_body.get('results', []):
-            idx = item['index']
-            result = results[idx].copy()
-            result['rerank_score'] = item['relevance_score']
-            reranked.append(result)
-        
-        return reranked
-    except Exception as e:
-        logger.error(f"Reranking failed: {e}")
-        return results[:top_k]
-
-def rrf_search(query: str, k: int = 60, limit: int = 10, persona: str = None) -> List[Dict]:
-    """Reciprocal Rank Fusion combining semantic, keyword, and fuzzy search"""
-    semantic_results = semantic_search(query, limit * 2, persona)
-    keyword_results = keyword_search(query, limit * 2, persona)
-    fuzzy_results = fuzzy_search(query, limit * 2, persona)
-    
-    product_scores = {}
-    product_data = {}
-    
-    for rank, result in enumerate(semantic_results, 1):
-        pid = result['productId']
-        product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (k + rank)
-        product_data[pid] = result
-    
-    for rank, result in enumerate(keyword_results, 1):
-        pid = result['productId']
-        product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (k + rank)
-        if pid not in product_data:
-            product_data[pid] = result
-    
-    for rank, result in enumerate(fuzzy_results, 1):
-        pid = result['productId']
-        product_scores[pid] = product_scores.get(pid, 0) + 1.0 / (k + rank)
-        if pid not in product_data:
-            product_data[pid] = result
-    
-    sorted_products = sorted(product_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
-    
-    results = []
-    for pid, score in sorted_products:
-        product = product_data[pid].copy()
-        product['score'] = score
-        product['method'] = 'Hybrid (RRF)'
-        results.append(product)
-    
-    return results
-
 # ============================================================================
-# ENHANCED UI COMPONENTS
+# ASYNC SEARCH EXECUTION
 # ============================================================================
 
-def render_skeleton_card():
-    """Render a skeleton loading card"""
-    st.markdown("""
-    <div class="skeleton skeleton-card"></div>
-    """, unsafe_allow_html=True)
+def run_search_async(search_methods: List[tuple], query: str, limit: int, persona: str, 
+                     semantic_weight: float, keyword_weight: float) -> Dict[str, Any]:
+    """Run multiple search methods in parallel using ThreadPoolExecutor"""
+    results = {}
+    timings = {}
+    start_times = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_method = {}
+        for method_name, method_func in search_methods:
+            start_times[method_name] = time.time()
+            if method_name == 'Hybrid (Weighted)':
+                future = executor.submit(method_func, query, semantic_weight, keyword_weight, limit, persona)
+            elif method_name == 'Hybrid (RRF)':
+                future = executor.submit(method_func, query, 60, limit, persona)
+            else:
+                future = executor.submit(method_func, query, limit, persona)
+            future_to_method[future] = method_name
+        for future in concurrent.futures.as_completed(future_to_method):
+            method_name = future_to_method[future]
+            try:
+                result = future.result()
+                elapsed = time.time() - start_times[method_name]
+                results[method_name] = result
+                timings[method_name] = elapsed
+            except Exception as e:
+                logger.error(f"Error in {method_name}: {e}")
+                results[method_name] = []
+                timings[method_name] = 0
+    return {'results': results, 'timings': timings}
 
-def render_product_card(product: Dict, show_score: bool = True):
-    """Render an enhanced product card with animations"""
+# ============================================================================
+# EXPORT FUNCTIONS
+# ============================================================================
+
+def export_results_to_csv(results_data: Dict[str, List[Dict]], query: str) -> str:
+    """Export search results to CSV format"""
+    rows = []
+    for method, results in results_data.items():
+        for result in results:
+            rows.append({
+                'Query': query,
+                'Method': method,
+                'Product ID': result.get('productId', ''),
+                'Description': result.get('description', ''),
+                'Category': result.get('category', ''),
+                'Price': result.get('price', 0),
+                'Stars': result.get('stars', 0),
+                'Reviews': result.get('reviews', 0),
+                'Score': result.get('score', 0),
+                'Rerank Score': result.get('rerank_score', '')
+            })
+    df = pd.DataFrame(rows)
+    return df.to_csv(index=False)
+
+def export_results_to_json(results_data: Dict[str, List[Dict]], query: str, 
+                           timings: Dict[str, float] = None) -> str:
+    """Export search results to JSON format"""
+    export_data = {
+        'query': query,
+        'timestamp': datetime.now().isoformat(),
+        'timings': timings or {},
+        'results': results_data
+    }
+    return json.dumps(export_data, indent=2)
+
+# ============================================================================
+# UI COMPONENTS
+# ============================================================================
+
+def render_product_card(product: Dict, show_score: bool = True, query: str = ""):
+    """Render an enhanced product card with animations and highlighting"""
     method = product.get('method', 'Unknown')
     badge_class = f"badge-{method.lower()}"
     
@@ -1170,7 +1313,11 @@ def render_product_card(product: Dict, show_score: bool = True):
     
     product_url = product.get('productUrl', '')
     img_url = product.get('imgUrl', '')
+    
+    # Highlight query terms in description
     description = product.get('description', 'No description')
+    if query:
+        description = highlight_text(description, query)
     
     # Make title and image clickable if URL exists
     if product_url:
@@ -1200,56 +1347,6 @@ def render_product_card(product: Dict, show_score: bool = True):
     </div>
     """, unsafe_allow_html=True)
 
-def render_knowledge_card(item: Dict, show_persona: bool = False):
-    """Render a knowledge base card with enhanced styling"""
-    content_type = item.get('content_type', 'unknown') or 'unknown'
-    severity = item.get('severity', 'low') or 'low'
-    
-    severity_colors = {
-        'low': '#10b981',
-        'medium': '#f59e0b',
-        'high': '#ef4444',
-        'critical': '#dc2626'
-    }
-    
-    severity_descriptions = {
-        'low': 'ℹ️ Informational - General FAQs and routine information',
-        'medium': '⚠️ Moderate - Customer complaints requiring attention',
-        'high': '🚨 Urgent - Product defects or warranty claims',
-        'critical': '🔥 Critical - Widespread defects requiring immediate action'
-    }
-    
-    content_type_display = content_type.replace('_', ' ').title()
-    if content_type == 'product_faq':
-        content_type_display = 'Product FAQ'
-    elif content_type == 'support_ticket':
-        content_type_display = 'Support Ticket'
-    elif content_type == 'internal_note':
-        content_type_display = 'Internal Note'
-    
-    col1, col2, col3 = st.columns([2, 2, 1])
-    with col1:
-        st.markdown(f"""
-        <span class="method-badge" style="background: {severity_colors.get(severity, '#666')};">
-            {(severity or 'low').upper()}
-        </span>
-        """, unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<span style="color: #B0B0B0; font-size: 0.875rem;">{content_type_display}</span>', unsafe_allow_html=True)
-        st.caption(severity_descriptions.get(severity, ''))
-    with col3:
-        st.caption(item.get('created_at', 'N/A')[:10] if item.get('created_at') else 'N/A')
-    
-    st.markdown(f"**{item.get('content', 'No content')}**")
-    
-    if item.get('product_description'):
-        st.markdown("---")
-        st.caption("🔗 Related Product")
-        st.markdown(f"{item.get('product_description', 'N/A')[:100]}...")
-        st.caption(f"${item.get('price', 0):.2f} • ⭐ {item.get('stars', 0):.1f} • {item.get('reviews', 0):,} reviews")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-
 def show_empty_state(message: str, icon: str = "🔍"):
     """Show an enhanced empty state"""
     st.markdown(f"""
@@ -1261,6 +1358,32 @@ def show_empty_state(message: str, icon: str = "🔍"):
     """, unsafe_allow_html=True)
 
 # ============================================================================
+# KEYBOARD SHORTCUTS
+# ============================================================================
+
+# Add JavaScript for keyboard shortcuts
+st.markdown("""
+<script>
+document.addEventListener('keydown', function(e) {
+    // Cmd/Ctrl + K to focus search
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[type="text"]');
+        if (searchInput) searchInput.focus();
+    }
+    
+    // Enter to trigger search (when focused on input)
+    if (e.key === 'Enter' && document.activeElement.tagName === 'INPUT') {
+        const searchButton = Array.from(document.querySelectorAll('button')).find(
+            btn => btn.textContent.includes('Search')
+        );
+        if (searchButton) searchButton.click();
+    }
+});
+</script>
+""", unsafe_allow_html=True)
+
+# ============================================================================
 # SESSION STATE
 # ============================================================================
 
@@ -1268,6 +1391,10 @@ if 'search_history' not in st.session_state:
     st.session_state.search_history = []
 if 'performance_metrics' not in st.session_state:
     st.session_state.performance_metrics = []
+if 'last_results' not in st.session_state:
+    st.session_state.last_results = {}
+if 'last_timings' not in st.session_state:
+    st.session_state.last_timings = {}
 
 # ============================================================================
 # MAIN APPLICATION
@@ -1289,13 +1416,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# SIDEBAR WITH COLLAPSIBLE SECTIONS
+# SIDEBAR
 # ============================================================================
 
 with st.sidebar:
     st.markdown("## ⚙️ Configuration")
     
-    # Persona selection with enhanced styling
+    # Persona selection
     st.markdown("### 👤 Persona (RLS)")
     st.caption("⚠️ Used in MCP Context Search (Tab 1) only")
     selected_persona = st.selectbox(
@@ -1322,11 +1449,8 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Database status with enhanced visuals
+    # Database status
     st.markdown("### 📊 Database Status")
-    
-    if 'db_connected' not in st.session_state:
-        st.session_state.db_connected = False
     
     try:
         conn = get_db_connection()
@@ -1347,11 +1471,9 @@ with st.sidebar:
         kb_count = result[0]
         
         conn.close()
-        st.session_state.db_connected = True
         
         st.success("✅ Connected")
         
-        # Show metrics with animation
         col1, col2 = st.columns(2)
         with col1:
             st.metric("Products", f"{product_count:,}")
@@ -1361,14 +1483,13 @@ with st.sidebar:
             st.metric("Status", "🟢 Online")
         
     except Exception as e:
-        st.session_state.db_connected = False
         st.error("❌ Connection Failed")
         if st.button("🔄 Retry Connection", key="retry_db"):
             st.rerun()
     
     st.markdown("---")
     
-    # Hybrid weights with visual feedback
+    # Hybrid weights
     with st.expander("⚖️ Hybrid Search Weights", expanded=False):
         semantic_weight = st.slider(
             "Semantic",
@@ -1392,7 +1513,7 @@ with st.sidebar:
         if total_weight > 0:
             st.caption(f"📊 Normalized: {semantic_weight/total_weight:.1%} / {keyword_weight/total_weight:.1%}")
     
-    # Search options in collapsible section
+    # Search options
     with st.expander("🔧 Search Options", expanded=False):
         results_limit = st.slider("Results per method", 1, 20, 5, key='results_limit')
         
@@ -1402,36 +1523,7 @@ with st.sidebar:
             key='time_filter'
         )
     
-    # Advanced Index Information (400-level)
-    with st.expander("🔧 Index Performance (Advanced)", expanded=False):
-        st.caption("PostgreSQL index configuration and performance")
-        
-        try:
-            conn = get_db_connection()
-            
-            # Get HNSW index info
-            st.markdown("**Vector Index (HNSW):**")
-            st.code("""CREATE INDEX ON product_catalog 
-USING hnsw (embedding vector_cosine_ops)
-WITH (m = 16, ef_construction = 64);""")
-            st.caption("• m=16: Max connections per layer (higher = better recall, more memory)")
-            st.caption("• ef_construction=64: Build-time search depth (higher = better quality)")
-            
-            st.markdown("**Full-Text Index (GIN):**")
-            st.code("""CREATE INDEX ON product_catalog 
-USING gin(to_tsvector('english', product_description));""")
-            st.caption("• GIN index for fast full-text search with stemming")
-            
-            st.markdown("**Trigram Index (GIN):**")
-            st.code("""CREATE INDEX ON product_catalog 
-USING gin(product_description gin_trgm_ops);""")
-            st.caption("• Trigram index for fuzzy matching (similarity threshold: 0.1)")
-            
-            conn.close()
-        except Exception as e:
-            st.caption("Index information unavailable")
-    
-    # Search History with better formatting
+    # Search History
     if st.session_state.search_history:
         st.markdown("---")
         with st.expander("🕒 Recent Searches", expanded=False):
@@ -1578,54 +1670,32 @@ with tab1:
                 if agent_result['error']:
                     st.error(f"❌ {agent_result['error']}")
                 else:
-                    # Enhanced stats panel
+                    # Display response directly
+                    st.markdown("**Response:**")
+                    st.markdown(agent_result['response'])
+                    
+                    # Show available tools in human-readable format
+                    with st.expander("🔗 MCP Tools Available", expanded=False):
+                        st.markdown("- **run_query** - Execute SQL queries against Aurora PostgreSQL")
+                        st.markdown("- **get_table_schema** - Discover table structure and column information")
+                    
+                    # Explain how the agent works
+                    with st.expander("🔍 How It Works", expanded=False):
                         st.markdown(f"""
-                        <div class="stats-panel">
-                            <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-                                <div>
-                                    <div style="font-size: 1.5rem; font-weight: 600;">🧠 Strands Agent</div>
-                                    <div style="font-size: 0.875rem; opacity: 0.9;">Claude Sonnet 4 + MCP</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 1.5rem; font-weight: 600;">{elapsed*1000:.0f}ms</div>
-                                    <div style="font-size: 0.875rem; opacity: 0.9;">Response Time</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 1.5rem; font-weight: 600;">✅</div>
-                                    <div style="font-size: 0.875rem; opacity: 0.9;">Database Query</div>
-                                </div>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        **Agent Architecture:**
                         
-                        if agent_result.get('available_tools'):
-                            with st.expander("🔗 MCP Tools Available", expanded=False):
-                                for tool in agent_result['available_tools']:
-                                    st.markdown(f"- `{tool}`")
+                        1. 🧠 **Strands Agent** receives your natural language query
+                        2. 🤖 **Claude Sonnet 4** analyzes the query and decides which MCP tools to use
+                        3. 🔧 **MCP Tools** execute SQL queries against Aurora PostgreSQL via Data API
+                        4. 📊 **Agent synthesizes** the database results into a natural language response
                         
-                        # Explain how the agent works
-                        with st.expander("🔍 How It Works", expanded=False):
-                            st.markdown(f"""
-                            **Agent Architecture:**
-                            
-                            1. 🧠 **Strands Agent** receives your natural language query
-                            2. 🤖 **Claude Sonnet 4** analyzes the query and decides which MCP tools to use
-                            3. 🔧 **MCP Tools** execute SQL queries against Aurora PostgreSQL via Data API
-                            4. 📊 **Agent synthesizes** the database results into a natural language response
-                            
-                            **Security Enforcement:**
-                            - ✅ Allowed: {', '.join(PERSONAS[selected_persona]['access_levels'])}
-                            - ❌ Denied: {', '.join([ct for ct in ['product_faq', 'support_ticket', 'internal_note', 'analytics'] if ct not in PERSONAS[selected_persona]['access_levels']]) or 'none'}
-                            - 🔒 Filter: WHERE '{selected_persona}' = ANY(persona_access)
-                            
-                            **Note:** The Strands framework abstracts away tool call details, so SQL queries are not exposed in the response object. However, the agent successfully queries the database to provide accurate answers.
-                            """)
-                        
-                        # Display response
-                        st.markdown("**Response:**")
-                        st.markdown(agent_result['response'])
-                        
-                        st.caption("💡 **Note:** This demo shows a single query response. The MCP architecture can be extended to support multi-turn conversations with chat history and follow-up questions (out of scope for this workshop).")
+                        **Security Enforcement:**
+                        - ✅ Allowed: {', '.join(PERSONAS[selected_persona]['access_levels'])}
+                        - ❌ Denied: {', '.join([ct for ct in ['product_faq', 'support_ticket', 'internal_note', 'analytics'] if ct not in PERSONAS[selected_persona]['access_levels']]) or 'none'}
+                        - 🔒 Filter: WHERE '{selected_persona}' = ANY(persona_access)
+                        """)
+                    
+                    st.caption("💡 **Note:** This demo shows a single query response. The MCP architecture can be extended to support multi-turn conversations with chat history and follow-up questions (out of scope for this workshop).")
                 
             except Exception as e:
                 st.error(f"Agent error: {str(e)}")
@@ -1637,38 +1707,44 @@ with tab2:
     st.markdown("### Compare Search Methods Side-by-Side")
     st.caption("🚀 See how different search algorithms perform on the same query")
     
-    # Quick queries
-    st.markdown("**⚡ Quick Try:**")
+    # Quick queries showcasing different search strengths (from notebook)
+    st.markdown("**⚡ Quick Try (each query highlights different search strengths):**")
     quick_cols = st.columns(5)
-    quick_queries = ["wireless headphones", "security camera", "robot vacuum", "smart doorbell", "laptop"]
-    for idx, q in enumerate(quick_queries):
+    quick_queries = [
+        ("wireless bluetooth headphones", "🔑 Keyword"),
+        ("wireles hedphones", "🎯 Fuzzy"),
+        ("eco-friendly water bottle", "🧠 Semantic"),
+        ("affordable noise canceling headphones under 200", "⚖️ Hybrid"),
+        ("durable laptop backpack with USB charging", "🔀 RRF")
+    ]
+    for idx, (q, hint) in enumerate(quick_queries):
         with quick_cols[idx]:
-            if st.button(f"💡 {q}", key=f"search_quick_{idx}"):
+            if st.button(f"{hint}\n{q}", key=f"search_quick_{idx}"):
                 st.session_state.comparison_query = q
                 st.rerun()
     
     st.markdown("---")
     
     # Options row
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns(2)
     with col1:
         use_rerank = st.checkbox(
             "✨ Use Cohere Rerank",
             value=False,
             key='use_rerank',
-            help="Applies Cohere's ML-based reranking model to re-score and re-order results from all search methods. Uses transformer neural network trained on query-document relevance pairs for superior accuracy (~50-200ms latency). Best for production search where relevance is critical."
+            help="Applies Cohere's ML-based reranking model to re-score and re-order results"
         )
     with col2:
-        show_all = st.checkbox("📊 Show All", value=False, key='show_all')
+        show_sql = st.checkbox(
+            "🔍 Show SQL Queries",
+            value=False,
+            key='show_sql',
+            help="Display the actual SQL queries executed for each method"
+        )
     
     # Initialize comparison_query if needed
     if 'comparison_query' not in st.session_state:
         st.session_state.comparison_query = ''
-    
-    # Handle quick search button clicks
-    if 'quick_search' in st.session_state:
-        st.session_state.comparison_query = st.session_state.quick_search
-        del st.session_state.quick_search
     
     search_query = st.text_input(
         "Search Query",
@@ -1678,99 +1754,73 @@ with tab2:
     
     search_button = st.button("🔍 Search All Methods", type="primary")
     
-    with st.expander("💡 Understanding Search Scores", expanded=False):
-        st.markdown("""
-        **Why Semantic Search Often Has Higher Scores:**
-        
-        - **Semantic (0.0-1.0)**: Cosine similarity between embeddings - naturally produces scores closer to 1.0 for relevant matches
-        - **Keyword (0.0-1.0)**: PostgreSQL ts_rank_cd scores - typically lower values even for good matches
-        - **Fuzzy (0.0-1.0)**: Trigram similarity - requires very close character matches to score high
-        - **Hybrid**: Weighted combination of Semantic + Keyword scores
-        
-        **Key Insight:** Higher scores don't always mean better results! Each method excels at different query types:
-        - Use **Semantic** for conceptual/meaning-based searches
-        - Use **Keyword** for exact term matching
-        - Use **Fuzzy** for typo-tolerant searches
-        - Use **Hybrid** for balanced results
-        
-        ---
-        
-        **💡 Understanding Hybrid Search Approaches:**
-        
-        **Challenge:** Different search methods produce vastly different score ranges (semantic: 0.7-1.0, keyword: 0.01-0.1), causing one method to dominate weighted combinations.
-        
-        **Solutions Demonstrated:**
-        - ✅ **Hybrid (70/30)** - Weighted score fusion (simple but requires tuning)
-        - ✅ **Hybrid-RRF** (Tab 3) - Rank-based fusion (robust, no normalization needed) ✨
-        - ✅ **Cohere Rerank** (checkbox above) - ML-based re-ranking (most sophisticated)
-        
-        **Try it:** Enable Cohere Rerank or check out RRF in Tab 3!
-        """)
-    
     if search_button and search_query:
-        # Create columns first
+        # Define search methods
+        methods = [
+            ('Keyword', keyword_search),
+            ('Fuzzy', fuzzy_search),
+            ('Semantic', semantic_search),
+            ('Hybrid (Weighted)', hybrid_search),
+            ('Hybrid (RRF)', rrf_search)
+        ]
+        
+        # Run async search
+        with st.spinner("🔍 Searching across all methods in parallel..."):
+            async_results = run_search_async(
+                methods,
+                search_query,
+                results_limit,
+                selected_persona,
+                semantic_weight,
+                keyword_weight
+            )
+            
+            results_data = async_results['results']
+            timings_data = async_results['timings']
+            
+            # Store in session state for export
+            st.session_state.last_results = results_data
+            st.session_state.last_timings = timings_data
+        
+        # Display results in columns
         cols = st.columns(5)
         
-        # Perform actual search with spinner
-        with st.spinner("🔍 Searching across all methods..."):
-            results_data = {}
-            methods = [
-                ('Keyword', lambda q: keyword_search(q, results_limit, selected_persona)),
-                ('Fuzzy', lambda q: fuzzy_search(q, results_limit, selected_persona)),
-                ('Semantic', lambda q: semantic_search(q, results_limit, selected_persona)),
-                ('Hybrid (Weighted)', lambda q: hybrid_search(q, semantic_weight, keyword_weight, results_limit, selected_persona)),
-                ('Hybrid (RRF)', lambda q: rrf_search(q, 60, results_limit, selected_persona))
-            ]
-        
-        for idx, (method_name, method_func) in enumerate(methods):
+        for idx, (method_name, _) in enumerate(methods):
             with cols[idx]:
+                results = results_data.get(method_name, [])
+                elapsed = timings_data.get(method_name, 0)
+                
                 st.markdown(f"#### {method_name}")
                 
-                start_time = time.time()
-                try:
-                    results = method_func(search_query)
-                    elapsed = time.time() - start_time
-                    
-                    if use_rerank and results:
-                        rerank_start = time.time()
-                        results = rerank_results(search_query, results, len(results))
-                        rerank_time = time.time() - rerank_start
-                        total_time = elapsed + rerank_time
-                        st.caption(f"⏱️ {elapsed*1000:.0f}ms + {rerank_time*1000:.0f}ms rerank")
-                    else:
-                        total_time = elapsed
-                        st.caption(f"⏱️ {elapsed*1000:.0f}ms")
-                    
-                    if results:
-                        st.caption(f"✅ {len(results)} results")
-                        
-                        display_count = len(results) if show_all else 3
-                        for result in results[:display_count]:
-                            with st.container():
-                                render_product_card(result, show_score=True)
-                        
-                        if f'results_{method_name}' not in st.session_state:
-                            st.session_state[f'results_{method_name}'] = results
-                    else:
-                        show_empty_state("No results found", "🔍")
-                    
-                    results_data[method_name] = {
-                        'count': len(results),
-                        'time': total_time,
-                        'avg_score': sum(r.get('score', 0) for r in results) / len(results) if results else 0
-                    }
-                    
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
+                # Show SQL query if enabled
+                if show_sql:
+                    with st.expander("📝 View SQL", expanded=False):
+                        st.markdown(get_sql_explanation(method_name, search_query), unsafe_allow_html=True)
+                
+                if use_rerank and results:
+                    rerank_start = time.time()
+                    results = rerank_results(search_query, results, len(results))
+                    rerank_time = time.time() - rerank_start
+                    total_time = elapsed + rerank_time
+                    st.caption(f"⏱️ {elapsed*1000:.0f}ms + {rerank_time*1000:.0f}ms rerank")
+                else:
+                    st.caption(f"⏱️ {elapsed*1000:.0f}ms")
+                
+                if results:
+                    st.caption(f"✅ {len(results)} results")
+                    for result in results:
+                        with st.container():
+                            render_product_card(result, show_score=True, query=search_query)
+                else:
+                    show_empty_state("No results found", "🔍")
         
         # Add to search history
-        if search_query:
-            st.session_state.search_history.append({
-                'query': search_query,
-                'timestamp': datetime.now().isoformat(),
-                'persona': selected_persona
-            })
-            st.session_state.search_history = st.session_state.search_history[-10:]
+        st.session_state.search_history.append({
+            'query': search_query,
+            'timestamp': datetime.now().isoformat(),
+            'persona': selected_persona
+        })
+        st.session_state.search_history = st.session_state.search_history[-10:]
         
         # Performance charts
         if results_data:
@@ -1782,15 +1832,15 @@ with tab2:
             with col1:
                 fig_time = go.Figure(data=[
                     go.Bar(
-                        x=list(results_data.keys()),
-                        y=[v['time'] * 1000 for v in results_data.values()],
-                        marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
-                        text=[f"{v['time']*1000:.0f}ms" for v in results_data.values()],
+                        x=list(timings_data.keys()),
+                        y=[v * 1000 for v in timings_data.values()],
+                        marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899'],
+                        text=[f"{v*1000:.0f}ms" for v in timings_data.values()],
                         textposition='auto',
                     )
                 ])
                 fig_time.update_layout(
-                    title="Response Time",
+                    title="Response Time (Lower is Better)",
                     yaxis_title="Milliseconds",
                     paper_bgcolor='#0a0a0a',
                     plot_bgcolor='#1a1a1a',
@@ -1800,12 +1850,17 @@ with tab2:
                 st.plotly_chart(fig_time, use_container_width=True)
             
             with col2:
+                avg_scores = {
+                    method: sum(r.get('score', 0) for r in results) / len(results) if results else 0
+                    for method, results in results_data.items()
+                }
+                
                 fig_score = go.Figure(data=[
                     go.Bar(
-                        x=list(results_data.keys()),
-                        y=[v['avg_score'] for v in results_data.values()],
-                        marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6'],
-                        text=[f"{v['avg_score']:.3f}" for v in results_data.values()],
+                        x=list(avg_scores.keys()),
+                        y=list(avg_scores.values()),
+                        marker_color=['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899'],
+                        text=[f"{v:.3f}" for v in avg_scores.values()],
                         textposition='auto',
                     )
                 ])
@@ -1818,7 +1873,65 @@ with tab2:
                     height=300
                 )
                 st.plotly_chart(fig_score, use_container_width=True)
+            
+            # Export buttons
+            st.markdown("---")
+            st.markdown("### 💾 Export Results")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                csv_data = export_results_to_csv(results_data, search_query)
+                st.download_button(
+                    label="📥 Download CSV",
+                    data=csv_data,
+                    file_name=f"search_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
+            
+            with col2:
+                json_data = export_results_to_json(results_data, search_query, timings_data)
+                st.download_button(
+                    label="📥 Download JSON",
+                    data=json_data,
+                    file_name=f"search_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json"
+                )
+            
+            with col3:
+                # Create summary report
+                summary = f"""
+# Search Results Summary
 
+**Query:** {search_query}
+**Timestamp:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Persona:** {PERSONAS[selected_persona]['name']}
+
+## Performance Metrics
+
+| Method | Time (ms) | Results | Avg Score |
+|--------|-----------|---------|-----------|
+"""
+                for method in methods:
+                    method_name = method[0]
+                    time_ms = timings_data.get(method_name, 0) * 1000
+                    result_count = len(results_data.get(method_name, []))
+                    avg_score = avg_scores.get(method_name, 0)
+                    summary += f"| {method_name} | {time_ms:.0f} | {result_count} | {avg_score:.3f} |\n"
+                
+                total_time = sum(timings_data.values())
+                max_time = max(timings_data.values()) if timings_data else 0
+                time_saved = total_time - max_time
+                summary += f"\n**Total Time (Sequential):** {total_time*1000:.0f}ms\n"
+                summary += f"**Total Time (Parallel):** {max_time*1000:.0f}ms\n"
+                summary += f"**Time Saved:** {time_saved*1000:.0f}ms ({(time_saved/total_time)*100:.1f}% if total_time > 0 else 0)\n"
+                
+                st.download_button(
+                    label="📥 Download Summary",
+                    data=summary,
+                    file_name=f"search_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                    mime="text/markdown"
+                )
 
 # TAB 3: Advanced Analysis
 
@@ -2051,7 +2164,7 @@ with tab4:
         "IVFFlat": ["🐢 Slower (50-200ms)", "⚡ Faster (minutes)", "📉 Lower (1.5x data)", "🎯 85-95%", "Development, write-heavy"]
     })
     
-    st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+    st.dataframe(comparison_df, width='stretch', hide_index=True)
     
     st.markdown("""
     **Decision Framework:**
