@@ -1554,25 +1554,25 @@ with tab1:
     st.markdown("**⚡ Quick Try:**")
     mcp_quick_queries_by_persona = {
         'customer': [
-            ("warranty", "✅ FAQ"),
-            ("return policy", "✅ FAQ"),
-            ("headphones", "✅ FAQ"),
-            ("setup guide", "✅ FAQ"),
-            ("support ticket", "🔒 Restricted")
+            ("Warranty", "✅ FAQ"),
+            ("Return policy", "✅ FAQ"),
+            ("Headphones", "✅ FAQ"),
+            ("Setup guide", "✅ FAQ"),
+            ("Support ticket", "🔒 Restricted")
         ],
         'support_agent': [
-            ("connectivity", "✅ Tickets"),
-            ("firmware", "✅ Tickets"),
-            ("maintenance", "✅ Internal"),
-            ("defect", "✅ Tickets"),
-            ("analytics", "🔒 Restricted")
+            ("Connectivity", "✅ Tickets"),
+            ("Firmware", "✅ Tickets"),
+            ("Maintenance", "✅ Internal"),
+            ("Defect", "✅ Tickets"),
+            ("Analytics", "🔒 Restricted")
         ],
         'product_manager': [
-            ("analytics", "✅ Analytics"),
-            ("defect rate", "✅ Analytics"),
-            ("warranty", "✅ All Access"),
-            ("firmware", "✅ All Access"),
-            ("maintenance", "✅ All Access")
+            ("Analytics", "✅ Analytics"),
+            ("Defect rate", "✅ Defect Analysis"),
+            ("Warranty", "✅ All Access"),
+            ("Firmware", "✅ All Access"),
+            ("Maintenance", "✅ All Access")
         ]
     }
     mcp_quick_queries = mcp_quick_queries_by_persona.get(selected_persona, [])
