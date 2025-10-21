@@ -1881,21 +1881,28 @@ with tab2:
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                csv_data = export_results_to_csv(results_data, search_query)
+                if 'csv_data' not in st.session_state or st.session_state.get('last_export_query') != search_query:
+                    st.session_state.csv_data = export_results_to_csv(results_data, search_query)
+                    st.session_state.last_export_query = search_query
+                
                 st.download_button(
                     label="📥 Download CSV",
-                    data=csv_data,
+                    data=st.session_state.csv_data,
                     file_name=f"search_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
+                    mime="text/csv",
+                    key="download_csv"
                 )
             
             with col2:
-                json_data = export_results_to_json(results_data, search_query, timings_data)
+                if 'json_data' not in st.session_state or st.session_state.get('last_export_query') != search_query:
+                    st.session_state.json_data = export_results_to_json(results_data, search_query, timings_data)
+                
                 st.download_button(
                     label="📥 Download JSON",
-                    data=json_data,
+                    data=st.session_state.json_data,
                     file_name=f"search_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json"
+                    mime="application/json",
+                    key="download_json"
                 )
             
             with col3:
