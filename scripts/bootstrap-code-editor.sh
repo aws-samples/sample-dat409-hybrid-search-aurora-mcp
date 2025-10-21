@@ -418,10 +418,10 @@ log "==================== ipykernel Installation Section ===================="
 log "Installing ipykernel for Python 3.13..."
 sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user ipykernel
 
-log "Registering Python 3.13 kernel..."
+log "Registering Python 3.13.3 kernel..."
 sudo -u "$CODE_EDITOR_USER" python3.13 -m ipykernel install --user \
     --name python3 \
-    --display-name "Python 3.13"
+    --display-name "Python 3.13.3"
 
 # Verify installation
 KERNEL_DIR="/home/$CODE_EDITOR_USER/.local/share/jupyter/kernels/python3"
