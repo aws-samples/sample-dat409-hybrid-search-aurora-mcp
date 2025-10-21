@@ -573,7 +573,7 @@ INSERT INTO bedrock_integration.knowledge_base (product_id, content, content_typ
 
 -- Report results
 SELECT 'Lab 2 setup completed' as status;
-SELECT content_type, COUNT(*) as count FROM knowledge_base GROUP BY content_type ORDER BY count DESC;
+SELECT content_type, COUNT(*) as count FROM bedrock_integration.knowledge_base GROUP BY content_type ORDER BY count DESC;
 SQL_LAB2
 
 # Execute Lab 2 setup
