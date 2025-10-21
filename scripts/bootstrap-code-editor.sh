@@ -551,26 +551,6 @@ if [ -f /workshop/.env ]; then
     set +a
 fi
 
-# Welcome message
-echo ""
-echo "═══════════════════════════════════════════════════════════════════"
-echo "  DAT409 - Hybrid Search with Aurora PostgreSQL for MCP Retrieval"
-echo "═══════════════════════════════════════════════════════════════════"
-echo ""
-echo "🔧 Available Commands:"
-echo "   lab1      - Navigate to Lab 1 (Hybrid Search)"
-echo "   lab2      - Navigate to Lab 2 (MCP Agent)"
-echo "   workshop  - Navigate to /workshop"
-echo "   psql      - Connect to PostgreSQL database"
-echo ""
-echo "📁 Workshop Structure:"
-echo "   /workshop/lab1-hybrid-search/notebook/  - Lab 1 Jupyter notebook"
-echo "   /workshop/lab2-mcp-agent/               - Lab 2 Streamlit app"
-echo "   /workshop/scripts/                      - Setup scripts"
-echo ""
-echo "═══════════════════════════════════════════════════════════════════"
-echo ""
-
 BASHRC_EOF
     
     log "✅ Database credentials configured"
