@@ -17,7 +17,7 @@ def update_notebook_kernel(notebook_path):
     
     # Update kernel metadata
     notebook['metadata']['kernelspec'] = {
-        "display_name": "Python 3.13",
+        "display_name": "Python 3.13.3",
         "language": "python",
         "name": "python3"
     }
@@ -32,7 +32,7 @@ def update_notebook_kernel(notebook_path):
         "name": "python",
         "nbconvert_exporter": "python",
         "pygments_lexer": "ipython3",
-        "version": "3.13.0"  # This ensures VSCode recognizes it as Python 3.13
+        "version": "3.13.3"  # This ensures VSCode recognizes it as Python 3.13
     }
     
     # Write back
@@ -42,7 +42,7 @@ def update_notebook_kernel(notebook_path):
     print(f"✅ Updated kernel metadata in {notebook_path}")
     print(f"   Display name: Python 3.13")
     print(f"   Kernel name: python3")
-    print(f"   Version: 3.13.0")
+    print(f"   Version: 3.13.3")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
