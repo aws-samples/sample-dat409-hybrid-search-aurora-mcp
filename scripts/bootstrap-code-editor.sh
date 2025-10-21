@@ -273,29 +273,66 @@ chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$SETTINGS_DIR"
 
 # Create workspace settings to auto-open terminal
 log "==================== Configuring Auto-Open Terminal ===================="
+log "Creating workspace configuration..."
 sudo -u "$CODE_EDITOR_USER" mkdir -p "$HOME_FOLDER/.vscode"
+sudo -u "$CODE_EDITOR_USER" mkdir -p "$HOME_FOLDER/scripts"
 
-# Create tasks.json for auto-opening terminal
-log "Creating tasks.json for terminal auto-open..."
+# 1. Create welcome script that STAYS OPEN
+cat > "$HOME_FOLDER/scripts/welcome.sh" << 'WELCOME_EOF'
+#!/bin/bash
+clear
 
-cat > "$HOME_FOLDER/.vscode/tasks.json" << 'TASKS_JSON'
+cat << 'EOF'
+
+═══════════════════════════════════════════════════════════════════
+  DAT409 - Hybrid Search with Aurora PostgreSQL for MCP Retrieval
+═══════════════════════════════════════════════════════════════════
+
+🚀 Quick Start:
+   1. Open Jupyter notebook:
+      lab1-hybrid-search/notebook/dat409-hybrid-search-notebook-TODO.ipynb
+   
+   2. Follow the notebook instructions to explore hybrid search
+   
+   3. Continue to Lab 2 for MCP integration
+
+🔧 Available Commands:
+   lab1      - Navigate to Lab 1 (Hybrid Search)
+   lab2      - Navigate to Lab 2 (MCP Agent)
+   workshop  - Navigate to /workshop
+   psql      - Connect to PostgreSQL database
+
+📁 Workshop Structure:
+   /workshop/lab1-hybrid-search/notebook/  - Lab 1 Jupyter notebook
+   /workshop/lab2-mcp-agent/               - Lab 2 Streamlit app
+   /workshop/scripts/                      - Setup scripts
+
+═══════════════════════════════════════════════════════════════════
+
+EOF
+
+# THIS LINE KEEPS TERMINAL OPEN
+exec bash
+WELCOME_EOF
+
+chmod +x "$HOME_FOLDER/scripts/welcome.sh"
+
+# 2. Create tasks.json to auto-open terminal
+cat > "$HOME_FOLDER/.vscode/tasks.json" << 'TASKS_EOF'
 {
     "version": "2.0.0",
     "tasks": [
         {
             "label": "Welcome Terminal",
             "type": "shell",
-            "command": "echo",
-            "args": [
-                "\n========================================\n🎓 Welcome to DAT409 Workshop!\n========================================\n\n📍 Current Directory: /workshop\n\n🚀 Quick Start:\n  1. Open: lab1-hybrid-search/notebook/dat409-hybrid-search-notebook.ipynb\n  2. Run: bash scripts/setup-database.sh (if not done)\n  3. Start exploring hybrid search!\n\n📚 Resources:\n  • Lab 1: /workshop/lab1-hybrid-search/\n  • Lab 2: /workshop/lab2-mcp-agent/\n  • Scripts: /workshop/scripts/\n\n💡 Tip: Database setup takes 6-9 minutes\n\n========================================"
-            ],
+            "command": "/workshop/scripts/welcome.sh",
             "presentation": {
-                "echo": true,
+                "echo": false,
                 "reveal": "always",
                 "focus": false,
                 "panel": "dedicated",
                 "showReuseMessage": false,
-                "clear": false
+                "clear": true
             },
             "runOptions": {
                 "runOn": "folderOpen"
@@ -304,9 +341,10 @@ cat > "$HOME_FOLDER/.vscode/tasks.json" << 'TASKS_JSON'
         }
     ]
 }
-TASKS_JSON
+TASKS_EOF
 
-cat > "$HOME_FOLDER/.vscode/settings.json" << 'WORKSPACE_SETTINGS'
+# 3. Create workspace settings (kernel + terminal config)
+cat > "$HOME_FOLDER/.vscode/settings.json" << 'SETTINGS_EOF'
 {
     "terminal.integrated.defaultProfile.linux": "bash",
     "terminal.integrated.cwd": "/workshop",
@@ -320,14 +358,15 @@ cat > "$HOME_FOLDER/.vscode/settings.json" << 'WORKSPACE_SETTINGS'
     "jupyter.preferredRemoteKernelIdForLocalConnection": "python3",
     "notebook.defaultKernel": "python3",
     "task.autoDetect": "on",
-    "task.problemMatchers.neverPrompt": true,
-    "task.quickOpen.history": 0
+    "task.problemMatchers.neverPrompt": true
 }
-WORKSPACE_SETTINGS
+SETTINGS_EOF
 
 chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/.vscode"
+chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/scripts"
 
-log "✅ Terminal auto-open configured"
+log "✅ Workspace configured - terminal will auto-open with welcome message"
+
 log "==================== End Auto-Open Terminal Configuration ===================="
 
 log "==================== End VS Code Extensions Section ===================="
