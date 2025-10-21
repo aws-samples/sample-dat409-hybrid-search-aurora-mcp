@@ -240,6 +240,13 @@ sudo -u "$CODE_EDITOR_USER" mkdir -p "$SETTINGS_DIR/User"
 cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
 {
     "python.defaultInterpreterPath": "/usr/bin/python3.13",
+    "jupyter.kernels.filter": [
+        {
+            "python": "/usr/bin/python3.13",
+            "type": "pythonEnvironment"
+        }
+    ],
+    "jupyter.preferredRemoteKernelIdForLocalConnection": "python3",
     "python.terminal.activateEnvironment": true,
     "python.linting.enabled": true,
     "jupyter.jupyterServerType": "local",
@@ -265,16 +272,63 @@ VSCODE_SETTINGS
 chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$SETTINGS_DIR"
 
 # Create workspace settings to auto-open terminal
-log "Creating workspace settings for auto-open terminal..."
+log "==================== Configuring Auto-Open Terminal ===================="
 sudo -u "$CODE_EDITOR_USER" mkdir -p "$HOME_FOLDER/.vscode"
+
+# Create tasks.json for auto-opening terminal
+log "Creating tasks.json for terminal auto-open..."
+
+cat > "$HOME_FOLDER/.vscode/tasks.json" << 'TASKS_JSON'
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Welcome Terminal",
+            "type": "shell",
+            "command": "echo",
+            "args": [
+                "\n========================================\n🎓 Welcome to DAT409 Workshop!\n========================================\n\n📍 Current Directory: /workshop\n\n🚀 Quick Start:\n  1. Open: lab1-hybrid-search/notebook/dat409-hybrid-search-notebook.ipynb\n  2. Run: bash scripts/setup-database.sh (if not done)\n  3. Start exploring hybrid search!\n\n📚 Resources:\n  • Lab 1: /workshop/lab1-hybrid-search/\n  • Lab 2: /workshop/lab2-mcp-agent/\n  • Scripts: /workshop/scripts/\n\n💡 Tip: Database setup takes 6-9 minutes\n\n========================================"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            },
+            "problemMatcher": []
+        }
+    ]
+}
+TASKS_JSON
+
 cat > "$HOME_FOLDER/.vscode/settings.json" << 'WORKSPACE_SETTINGS'
 {
     "terminal.integrated.defaultProfile.linux": "bash",
-    "terminal.integrated.cwd": "/workshop"
+    "terminal.integrated.cwd": "/workshop",
+    "python.defaultInterpreterPath": "/usr/bin/python3.13",
+    "jupyter.kernels.filter": [
+        {
+            "path": "/usr/bin/python3.13",
+            "type": "pythonEnvironment"
+        }
+    ],
+    "jupyter.preferredRemoteKernelIdForLocalConnection": "python3",
+    "notebook.defaultKernel": "python3",
+    "task.autoDetect": "on",
+    "task.problemMatchers.neverPrompt": true,
+    "task.quickOpen.history": 0
 }
 WORKSPACE_SETTINGS
 
 chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/.vscode"
+
+log "✅ Terminal auto-open configured"
+log "==================== End Auto-Open Terminal Configuration ===================="
 
 log "==================== End VS Code Extensions Section ===================="
 
@@ -316,6 +370,26 @@ fi
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> "/home/$CODE_EDITOR_USER/.bashrc"
 
 log "==================== End Python Packages Section ===================="
+
+# ===========================================================================
+# Install and register ipykernel
+# ===========================================================================
+
+log "==================== ipykernel Installation Section ===================="
+log "Installing ipykernel for Python 3.13..."
+sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user ipykernel
+
+log "Registering Python 3.13 kernel..."
+sudo -u "$CODE_EDITOR_USER" python3.13 -m ipykernel install --user \
+    --name python3 \
+    --display-name "Python 3.13"
+
+# Verify installation
+KERNEL_DIR="/home/$CODE_EDITOR_USER/.local/share/jupyter/kernels/python3"
+if [ -d "$KERNEL_DIR" ]; then
+    log "✅ Kernel registered successfully"
+fi
+log "==================== End ipykernel Installation Section ===================="
 
 # ===========================================================================
 # DATABASE CONFIGURATION (Credentials Only - No Tables)
