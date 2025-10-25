@@ -84,15 +84,15 @@ Parameters:
     Default: "17.5"
     Description: PostgreSQL version
   
-  AssetsBucket:
+  AssetsBucketName:
     Type: String
     Default: ''
-    Description: S3 bucket containing pre-generated embeddings
+    Description: S3 bucket containing workshop assets
   
-  AssetsPrefix:
+  AssetsBucketPrefix:
     Type: String
     Default: ''
-    Description: S3 prefix for assets
+    Description: S3 prefix for workshop assets
 
 Conditions:
   IsGraviton: !Or
@@ -250,6 +250,8 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
+                  - !Sub 'arn:aws:s3:::${AssetsBucketName}/*'
+                  - !Sub 'arn:aws:s3:::${AssetsBucketName}'
                   - !Sub 'arn:aws:s3:::ws-assets-prod-iad-r-${AWS::Region}-*/*'
                   - !Sub 'arn:aws:s3:::ws-assets-prod-iad-r-${AWS::Region}-*'
               - Effect: Allow
@@ -321,7 +323,7 @@ Resources:
           AssetsBucket:
             type: String
             default: ''
-          AssetsPrefix:
+          AssetsBucketPrefix:
             type: String
             default: ''
         mainSteps:
@@ -364,7 +366,7 @@ Resources:
                   export DB_NAME="{{ DBName }}"
                   export AWS_REGION="${AWS::Region}"
                   export ASSETS_BUCKET="{{ AssetsBucket }}"
-                  export ASSETS_PREFIX="{{ AssetsPrefix }}"
+                  export ASSETS_PREFIX="{{ AssetsBucketPrefix }}"
                   
                   curl -fsSL "{{ BootstrapScriptUrl }}" -o /tmp/bootstrap-unified.sh
                   
@@ -684,8 +686,8 @@ Resources:
       DBClusterEndpoint: !Ref DBClusterEndpoint
       DBClusterArn: !Ref DBClusterArn
       DBName: !Ref DBName
-      AssetsBucket: !Ref AssetsBucket
-      AssetsPrefix: !Ref AssetsPrefix
+      AssetsBucket: !Ref AssetsBucketName
+      AssetsBucketPrefix: !Ref AssetsBucketPrefix
 
   # Cache Policy
   CodeEditorCachePolicy:
