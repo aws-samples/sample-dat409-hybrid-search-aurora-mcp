@@ -221,6 +221,8 @@ Resources:
         DBName: workshop_db
         PythonVersion: '3.13'
         PostgreSQLVersion: '16'
+        AssetsBucket: !Ref AssetsBucketName
+        AssetsPrefix: !Ref AssetsBucketPrefix
       Tags:
         - Key: Workshop
           Value: !Ref WorkshopName

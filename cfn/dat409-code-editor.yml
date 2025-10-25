@@ -83,6 +83,16 @@ Parameters:
     Type: String
     Default: "17.5"
     Description: PostgreSQL version
+  
+  AssetsBucket:
+    Type: String
+    Default: ''
+    Description: S3 bucket containing pre-generated embeddings
+  
+  AssetsPrefix:
+    Type: String
+    Default: ''
+    Description: S3 prefix for assets
 
 Conditions:
   IsGraviton: !Or
@@ -674,8 +684,8 @@ Resources:
       DBClusterEndpoint: !Ref DBClusterEndpoint
       DBClusterArn: !Ref DBClusterArn
       DBName: !Ref DBName
-      AssetsBucket: ''
-      AssetsPrefix: ''
+      AssetsBucket: !Ref AssetsBucket
+      AssetsPrefix: !Ref AssetsPrefix
 
   # Cache Policy
   CodeEditorCachePolicy:
