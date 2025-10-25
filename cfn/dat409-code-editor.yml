@@ -320,7 +320,7 @@ Resources:
           DBName:
             type: String
             default: !Ref DBName
-          AssetsBucket:
+          AssetsBucketName:
             type: String
             default: ''
           AssetsBucketPrefix:
@@ -365,7 +365,7 @@ Resources:
                   export DB_CLUSTER_ARN="{{ DBClusterArn }}"
                   export DB_NAME="{{ DBName }}"
                   export AWS_REGION="${AWS::Region}"
-                  export ASSETS_BUCKET="{{ AssetsBucket }}"
+                  export ASSETS_BUCKET="{{ AssetsBucketName }}"
                   export ASSETS_PREFIX="{{ AssetsBucketPrefix }}"
                   
                   curl -fsSL "{{ BootstrapScriptUrl }}" -o /tmp/bootstrap-unified.sh
@@ -686,7 +686,7 @@ Resources:
       DBClusterEndpoint: !Ref DBClusterEndpoint
       DBClusterArn: !Ref DBClusterArn
       DBName: !Ref DBName
-      AssetsBucket: !Ref AssetsBucketName
+      AssetsBucketName: !Ref AssetsBucketName
       AssetsBucketPrefix: !Ref AssetsBucketPrefix
 
   # Cache Policy
