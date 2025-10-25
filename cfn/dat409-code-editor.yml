@@ -42,8 +42,8 @@ Parameters:
     
   BootstrapScriptUrl:
     Type: String
-    Default: https://raw.githubusercontent.com/aws-samples/sample-dat409-hybrid-search-aurora-mcp/main/scripts/bootstrap-code-editor.sh
-    Description: URL to the bootstrap script
+    Default: https://raw.githubusercontent.com/aws-samples/sample-dat409-hybrid-search-aurora-mcp/main/scripts/bootstrap-code-editor-unified.sh
+    Description: URL to the unified bootstrap script
     
   VPCId:
     Type: String
@@ -238,9 +238,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                  - s3:PutObject
                   - s3:ListBucket
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:aws:s3:::ws-assets-prod-iad-r-${AWS::Region}-*/*'
+                  - !Sub 'arn:aws:s3:::ws-assets-prod-iad-r-${AWS::Region}-*'
               - Effect: Allow
                 Action:
                   - rds:DescribeDBClusters
@@ -337,7 +338,7 @@ Resources:
                 - '#!/bin/bash'
                 - 'set -euo pipefail'
                 - !Sub |
-                  echo "=== DAT409 Bootstrap (Infrastructure Only) ==="
+                  echo "=== DAT409 Unified Bootstrap (Code Editor + Database) ==="
                   echo "Timestamp: $$(date)"
                   
                   export DB_SECRET_ARN="{{ DBSecretArn }}"
@@ -345,32 +346,36 @@ Resources:
                   export DB_CLUSTER_ARN="{{ DBClusterArn }}"
                   export DB_NAME="{{ DBName }}"
                   export AWS_REGION="${AWS::Region}"
+                  export ASSETS_BUCKET="$${ASSETS_BUCKET:-}"
+                  export ASSETS_PREFIX="$${ASSETS_PREFIX:-}"
                   
-                  curl -fsSL "{{ BootstrapScriptUrl }}" -o /tmp/bootstrap-code-editor.sh
+                  curl -fsSL "{{ BootstrapScriptUrl }}" -o /tmp/bootstrap-unified.sh
                   
-                  if [ ! -f /tmp/bootstrap-code-editor.sh ]; then
-                    echo "ERROR: Failed to download bootstrap script"
+                  if [ ! -f /tmp/bootstrap-unified.sh ]; then
+                    echo "ERROR: Failed to download unified bootstrap script"
                     exit 1
                   fi
                   
-                  chmod +x /tmp/bootstrap-code-editor.sh
+                  chmod +x /tmp/bootstrap-unified.sh
                   
-                  echo "Executing infrastructure bootstrap (no database setup yet)..."
+                  echo "Executing unified bootstrap (Code Editor + Database)..."
+                  ASSETS_BUCKET="$${ASSETS_BUCKET:-}" \
+                  ASSETS_PREFIX="$${ASSETS_PREFIX:-}" \
                   DB_SECRET_ARN="{{ DBSecretArn }}" \
                   DB_CLUSTER_ENDPOINT="{{ DBClusterEndpoint }}" \
                   DB_CLUSTER_ARN="{{ DBClusterArn }}" \
                   DB_NAME="{{ DBName }}" \
                   AWS_REGION="${AWS::Region}" \
-                  /tmp/bootstrap-code-editor.sh "{{ CodeEditorPassword }}"
+                  /tmp/bootstrap-unified.sh "{{ CodeEditorPassword }}"
                   
                   if [ $$? -eq 0 ]; then
-                    echo "✅ Infrastructure bootstrap completed"
+                    echo "✅ Unified bootstrap completed"
                   else
                     echo "❌ Bootstrap failed"
                     exit 1
                   fi
                   
-                  rm -f /tmp/bootstrap-code-editor.sh
+                  rm -f /tmp/bootstrap-unified.sh
 
           - name: CloneWorkshopRepository
             action: aws:runShellScript
@@ -494,12 +499,12 @@ Resources:
                   
                   if [[ "$VALIDATION_PASSED" == "true" ]]; then
                     echo ""
-                    echo "✅ INFRASTRUCTURE SETUP COMPLETE"
+                    echo "✅ UNIFIED SETUP COMPLETE (Code Editor + Database)"
                     echo ""
                     echo "📘 Next Steps:"
                     echo "  1. Access Code Editor via CloudFront URL"
-                    echo "  2. Open terminal and run: cd /workshop && bash scripts/setup-database.sh"
-                    echo "  3. Database setup takes 6-9 minutes"
+                    echo "  2. Database is pre-loaded and ready to use"
+                    echo "  3. Open lab1-hybrid-search/notebook/dat409-hybrid-search-notebook.ipynb"
                     exit 0
                   else
                     echo ""

@@ -122,18 +122,18 @@ CREATE SCHEMA IF NOT EXISTS bedrock_integration;
 DROP TABLE IF EXISTS bedrock_integration.product_catalog CASCADE;
 
 CREATE TABLE bedrock_integration.product_catalog (
-    "productId" VARCHAR(255) PRIMARY KEY,
-    product_description TEXT,
-    imgurl TEXT,
-    producturl TEXT,
-    stars NUMERIC,
-    reviews INT,
-    price NUMERIC,
-    category_id INT,
-    isbestseller BOOLEAN,
-    boughtinlastmonth INT,
-    category_name VARCHAR(255),
-    quantity INT,
+    "productId" CHAR(10) PRIMARY KEY,
+    product_description VARCHAR(500) NOT NULL,
+    imgurl VARCHAR(70),
+    producturl VARCHAR(40),
+    stars NUMERIC(2,1) CHECK (stars >= 1.0 AND stars <= 5.0),
+    reviews INTEGER CHECK (reviews >= 0),
+    price NUMERIC(8,2) CHECK (price >= 0),
+    category_id SMALLINT CHECK (category_id > 0),
+    isbestseller BOOLEAN NOT NULL DEFAULT FALSE,
+    boughtinlastmonth INTEGER CHECK (boughtinlastmonth >= 0),
+    category_name VARCHAR(50) NOT NULL,
+    quantity SMALLINT CHECK (quantity >= 0 AND quantity <= 1000),
     embedding vector(1024)
 );
 
@@ -283,20 +283,20 @@ if 'productId' not in df.columns or df['productId'].isna().any():
     df['productId'] = ['B' + str(i).zfill(7) for i in range(len(df))]
 
 # Truncate text fields to fit database constraints
-df['product_description'] = df['product_description'].astype(str).str[:2000]
-df['imgurl'] = df['imgurl'].astype(str).str[:500]
-df['producturl'] = df['producturl'].astype(str).str[:500]
-df['category_name'] = df['category_name'].astype(str).str[:255]
-df['productId'] = df['productId'].astype(str).str[:255]
+df['product_description'] = df['product_description'].astype(str).str[:500]
+df['imgurl'] = df['imgurl'].astype(str).str[:70]
+df['producturl'] = df['producturl'].astype(str).str[:40]
+df['category_name'] = df['category_name'].astype(str).str[:50]
+df['productId'] = df['productId'].astype(str).str[:10]
 
-# Convert data types
-df['stars'] = pd.to_numeric(df['stars'], errors='coerce').fillna(0)
-df['reviews'] = pd.to_numeric(df['reviews'], errors='coerce').fillna(0).astype(int)
-df['price'] = pd.to_numeric(df['price'], errors='coerce').fillna(0)
-df['category_id'] = pd.to_numeric(df['category_id'], errors='coerce').fillna(0).astype(int)
+# Convert data types with constraint validation
+df['stars'] = pd.to_numeric(df['stars'], errors='coerce').fillna(3.0).clip(1.0, 5.0).round(1)
+df['reviews'] = pd.to_numeric(df['reviews'], errors='coerce').fillna(0).clip(0, None).astype(int)
+df['price'] = pd.to_numeric(df['price'], errors='coerce').fillna(0).clip(0, 99999999.99).round(2)
+df['category_id'] = pd.to_numeric(df['category_id'], errors='coerce').fillna(1).clip(1, 32767).astype(int)
 df['isbestseller'] = df['isbestseller'].astype(bool)
-df['boughtinlastmonth'] = pd.to_numeric(df['boughtinlastmonth'], errors='coerce').fillna(0).astype(int)
-df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).astype(int)
+df['boughtinlastmonth'] = pd.to_numeric(df['boughtinlastmonth'], errors='coerce').fillna(0).clip(0, None).astype(int)
+df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce').fillna(0).clip(0, 1000).astype(int)
 
 print(f"✅ Prepared {len(df)} products for processing")
 
