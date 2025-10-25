@@ -308,6 +308,12 @@ Resources:
           DBName:
             type: String
             default: !Ref DBName
+          AssetsBucket:
+            type: String
+            default: ''
+          AssetsPrefix:
+            type: String
+            default: ''
         mainSteps:
           - name: InstallCloudWatchAgent
             action: aws:configurePackage
@@ -341,13 +347,14 @@ Resources:
                   echo "=== DAT409 Unified Bootstrap (Code Editor + Database) ==="
                   echo "Timestamp: $$(date)"
                   
+                  # Export all parameters as environment variables
                   export DB_SECRET_ARN="{{ DBSecretArn }}"
                   export DB_CLUSTER_ENDPOINT="{{ DBClusterEndpoint }}"
                   export DB_CLUSTER_ARN="{{ DBClusterArn }}"
                   export DB_NAME="{{ DBName }}"
                   export AWS_REGION="${AWS::Region}"
-                  export ASSETS_BUCKET="$${ASSETS_BUCKET:-}"
-                  export ASSETS_PREFIX="$${ASSETS_PREFIX:-}"
+                  export ASSETS_BUCKET="{{ AssetsBucket }}"
+                  export ASSETS_PREFIX="{{ AssetsPrefix }}"
                   
                   curl -fsSL "{{ BootstrapScriptUrl }}" -o /tmp/bootstrap-unified.sh
                   
@@ -359,13 +366,6 @@ Resources:
                   chmod +x /tmp/bootstrap-unified.sh
                   
                   echo "Executing unified bootstrap (Code Editor + Database)..."
-                  ASSETS_BUCKET="$${ASSETS_BUCKET:-}" \
-                  ASSETS_PREFIX="$${ASSETS_PREFIX:-}" \
-                  DB_SECRET_ARN="{{ DBSecretArn }}" \
-                  DB_CLUSTER_ENDPOINT="{{ DBClusterEndpoint }}" \
-                  DB_CLUSTER_ARN="{{ DBClusterArn }}" \
-                  DB_NAME="{{ DBName }}" \
-                  AWS_REGION="${AWS::Region}" \
                   /tmp/bootstrap-unified.sh "{{ CodeEditorPassword }}"
                   
                   if [ $$? -eq 0 ]; then
@@ -674,6 +674,8 @@ Resources:
       DBClusterEndpoint: !Ref DBClusterEndpoint
       DBClusterArn: !Ref DBClusterArn
       DBName: !Ref DBName
+      AssetsBucket: ''
+      AssetsPrefix: ''
 
   # Cache Policy
   CodeEditorCachePolicy:
