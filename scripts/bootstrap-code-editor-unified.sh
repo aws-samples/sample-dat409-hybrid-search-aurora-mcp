@@ -581,8 +581,13 @@ log "MCP configuration will be set up after repository clone"
 
 log "==================== Automated Database Setup ===================="
 
+if [ -z "$ASSETS_BUCKET" ]; then
+    error "ASSETS_BUCKET environment variable is not set. This must be provided by CloudFormation."
+fi
+
 if [ ! -z "$ASSETS_BUCKET" ] && [ ! -z "$DB_HOST" ] && [ ! -z "$DB_PASSWORD" ]; then
     log "Starting automated database initialization..."
+    log "Using S3 bucket: s3://${ASSETS_BUCKET}/${ASSETS_PREFIX}"
     
     export PGPASSWORD="$DB_PASSWORD"
     
