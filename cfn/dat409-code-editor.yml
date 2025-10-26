@@ -406,7 +406,7 @@ Resources:
           - name: RunGitHubBootstrap
             action: aws:runShellScript
             inputs:
-              timeoutSeconds: 1200
+              timeoutSeconds: 1800
               runCommand:
                 - '#!/bin/bash'
                 - 'set -euo pipefail'
@@ -423,6 +423,10 @@ Resources:
                   export ASSETS_BUCKET="{{ AssetsBucketName }}"
                   export ASSETS_PREFIX="{{ AssetsBucketPrefix }}"
                   
+                  echo "Environment variables set:"
+                  echo "  ASSETS_BUCKET=$ASSETS_BUCKET"
+                  echo "  ASSETS_PREFIX=$ASSETS_PREFIX"
+                  
                   curl -fsSL "{{ BootstrapScriptUrl }}" -o /tmp/bootstrap-unified.sh
                   
                   if [ ! -f /tmp/bootstrap-unified.sh ]; then
@@ -433,6 +437,13 @@ Resources:
                   chmod +x /tmp/bootstrap-unified.sh
                   
                   echo "Executing unified bootstrap (Code Editor + Database)..."
+                  DB_SECRET_ARN="$DB_SECRET_ARN" \
+                  DB_CLUSTER_ENDPOINT="$DB_CLUSTER_ENDPOINT" \
+                  DB_CLUSTER_ARN="$DB_CLUSTER_ARN" \
+                  DB_NAME="$DB_NAME" \
+                  AWS_REGION="$AWS_REGION" \
+                  ASSETS_BUCKET="$ASSETS_BUCKET" \
+                  ASSETS_PREFIX="$ASSETS_PREFIX" \
                   /tmp/bootstrap-unified.sh "{{ CodeEditorPassword }}"
                   
                   if [ $$? -eq 0 ]; then

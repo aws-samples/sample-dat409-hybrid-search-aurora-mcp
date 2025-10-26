@@ -387,7 +387,7 @@ sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user --upgrade pip setup
 
 log "Installing essential packages for both labs..."
 sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
-    boto3 psycopg pgvector pandas numpy matplotlib seaborn tqdm \
+    boto3 psycopg psycopg-binary pgvector pandas numpy matplotlib seaborn tqdm \
     jupyterlab jupyter ipywidgets notebook python-dotenv streamlit plotly pillow requests
 
 check_success "Core Python package installation"
@@ -648,10 +648,17 @@ fi
 
 log "✅ Downloaded pre-generated embeddings from S3 ($(wc -l < $DATA_FILE) lines)"
     
-    # Load data using Python
-    log "Loading product data into database..."
-    python3 << 'PYTHON'
-import os, csv, json, psycopg
+# Load data using Python
+log "Loading product data into database (this may take 2-3 minutes)..."
+python3.13 << 'PYTHON'
+import os, csv, json, sys
+try:
+    import psycopg
+except ImportError:
+    print("ERROR: psycopg not found, installing...")
+    import subprocess
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--user', 'psycopg', 'psycopg-binary'])
+    import psycopg
 
 conn = psycopg.connect(
     host=os.environ['DB_HOST'],
@@ -661,10 +668,12 @@ conn = psycopg.connect(
     password=os.environ['DB_PASSWORD']
 )
 
+count = 0
 with open('/tmp/amazon-products-sample-with-cohere-embeddings.csv', 'r') as f:
     reader = csv.DictReader(f)
     with conn.cursor() as cur:
         for row in reader:
+            count += 1
             # Validate and clip values to match schema constraints
             product_id = str(row['productId'])[:10]
             description = str(row['product_description'])[:500] if row['product_description'] else 'Product'
@@ -689,10 +698,20 @@ with open('/tmp/amazon-products-sample-with-cohere-embeddings.csv', 'r') as f:
                 product_id, description, imgurl, producturl, stars, reviews, price,
                 category_id, isbestseller, boughtinlastmonth, category_name, quantity, embedding
             ))
+            
+            # Commit every 1000 rows to prevent timeout
+            if count % 1000 == 0:
+                conn.commit()
+                print(f"Loaded {count} products...")
+
 conn.commit()
 conn.close()
-print("✅ Data loaded successfully")
+print(f"✅ Data loaded successfully: {count} products")
 PYTHON
+
+if [ $? -ne 0 ]; then
+    error "Python data loading failed"
+fi
     
     # Create indexes
     log "Creating search indexes..."
