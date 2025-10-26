@@ -86,13 +86,12 @@ Parameters:
   
   AssetsBucketName:
     Type: String
-    Default: ''
-    Description: S3 bucket containing workshop assets
+    Description: S3 bucket containing workshop assets (REQUIRED)
   
   AssetsBucketPrefix:
     Type: String
     Default: ''
-    Description: S3 prefix for workshop assets
+    Description: S3 prefix for workshop assets (optional)
 
 Conditions:
   IsGraviton: !Or
@@ -100,6 +99,7 @@ Conditions:
     - !Equals [!Select [0, !Split ['.', !Ref InstanceType]], 'c6g']
     - !Equals [!Select [0, !Split ['.', !Ref InstanceType]], 'm6g']
     - !Equals [!Select [0, !Split ['.', !Ref InstanceType]], 'r6g']
+  HasAssetsBucket: !Not [!Equals [!Ref AssetsBucketName, '']]
 
 Mappings:
   ArmImage:
@@ -249,11 +249,12 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:ListBucket
-                Resource:
-                  - !Sub 'arn:aws:s3:::${AssetsBucketName}/*'
-                  - !Sub 'arn:aws:s3:::${AssetsBucketName}'
-                  - !Sub 'arn:aws:s3:::ws-assets-prod-iad-r-${AWS::Region}-*/*'
-                  - !Sub 'arn:aws:s3:::ws-assets-prod-iad-r-${AWS::Region}-*'
+                Resource: !If
+                  - HasAssetsBucket
+                  - - !Sub 'arn:aws:s3:::${AssetsBucketName}/*'
+                    - !Sub 'arn:aws:s3:::${AssetsBucketName}'
+                  - - !Sub 'arn:aws:s3:::ws-assets-prod-iad-r-${AWS::Region}-*/*'
+                    - !Sub 'arn:aws:s3:::ws-assets-prod-iad-r-${AWS::Region}-*'
               - Effect: Allow
                 Action:
                   - rds:DescribeDBClusters

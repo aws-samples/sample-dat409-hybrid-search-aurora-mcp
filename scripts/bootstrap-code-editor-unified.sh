@@ -581,27 +581,29 @@ log "MCP configuration will be set up after repository clone"
 
 log "==================== Automated Database Setup ===================="
 
-if [ -z "$ASSETS_BUCKET" ]; then
-    error "ASSETS_BUCKET environment variable is not set. This must be provided by CloudFormation."
+# Validate required parameters
+if [ -z "$DB_HOST" ] || [ -z "$DB_PASSWORD" ]; then
+    error "Database credentials not available - cannot proceed"
 fi
 
-if [ ! -z "$ASSETS_BUCKET" ] && [ ! -z "$DB_HOST" ] && [ ! -z "$DB_PASSWORD" ]; then
-    log "Starting automated database initialization..."
-    log "Using S3 bucket: s3://${ASSETS_BUCKET}/${ASSETS_PREFIX}"
-    
-    export PGPASSWORD="$DB_PASSWORD"
-    
-    # Test connectivity
-    log "Testing database connectivity..."
-    if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT version();" &>/dev/null; then
-        log "✅ Database connection successful"
-    else
-        error "Database connection failed"
-    fi
-    
-    # Create schema and tables
-    log "Creating schema and tables..."
-    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" << 'SQL'
+if [ -z "$ASSETS_BUCKET" ]; then
+    error "ASSETS_BUCKET not provided - cannot download pre-generated embeddings"
+fi
+
+log "Starting automated database initialization..."
+log "S3 Source: s3://${ASSETS_BUCKET}/${ASSETS_PREFIX}amazon-products-sample-with-cohere-embeddings.csv"
+export PGPASSWORD="$DB_PASSWORD"
+
+# Test connectivity
+log "Testing database connectivity..."
+if ! psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT version();" &>/dev/null; then
+    error "Database connection failed"
+fi
+log "✅ Database connection successful"
+
+# Create schema and tables
+log "Creating schema and tables..."
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" << 'SQL'
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE SCHEMA IF NOT EXISTS bedrock_integration;
@@ -627,11 +629,19 @@ CREATE INDEX idx_product_catalog_category ON bedrock_integration.product_catalog
 CREATE INDEX idx_product_catalog_price ON bedrock_integration.product_catalog(price);
 CREATE INDEX idx_product_catalog_stars ON bedrock_integration.product_catalog(stars);
 SQL
-    
-    # Download pre-generated embeddings CSV from Workshop Studio assets
-    log "Downloading product data with embeddings from S3..."
-    DATA_FILE="/tmp/amazon-products-sample-with-cohere-embeddings.csv"
-    aws s3 cp "s3://${ASSETS_BUCKET}/${ASSETS_PREFIX}amazon-products-sample-with-cohere-embeddings.csv" "$DATA_FILE" || error "Failed to download data file"
+
+# Download pre-generated embeddings from S3 (MANDATORY)
+DATA_FILE="/tmp/amazon-products-sample-with-cohere-embeddings.csv"
+log "Downloading product data with embeddings from S3..."
+if ! aws s3 cp "s3://${ASSETS_BUCKET}/${ASSETS_PREFIX}amazon-products-sample-with-cohere-embeddings.csv" "$DATA_FILE"; then
+    error "Failed to download CSV from S3. Check: 1) ASSETS_BUCKET='$ASSETS_BUCKET' 2) IAM permissions 3) File exists in S3"
+fi
+
+if [ ! -f "$DATA_FILE" ] || [ ! -s "$DATA_FILE" ]; then
+    error "Downloaded file is missing or empty: $DATA_FILE"
+fi
+
+log "✅ Downloaded pre-generated embeddings from S3 ($(wc -l < $DATA_FILE) lines)"
     
     # Load data using Python
     log "Loading product data into database..."
@@ -742,13 +752,13 @@ SELECT "productId", 'Q: What is the warranty? A: 1-year manufacturer warranty.',
 FROM target_products;
 SQL
     
-    PRODUCT_COUNT=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog" | xargs)
-    
-    log "✅ Database initialized with $PRODUCT_COUNT products"
-else
-    warn "Skipping automated database setup - missing ASSETS_BUCKET or DB credentials"
-    warn "Run scripts/setup-database.sh manually after repository clone"
+PRODUCT_COUNT=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog" | xargs)
+
+if [ "$PRODUCT_COUNT" -eq 0 ]; then
+    error "Data loading failed - product_catalog is empty"
 fi
+
+log "✅ Database initialized with $PRODUCT_COUNT products from S3"
 
 log "==================== Bootstrap Summary ===================="
 echo "✅ COMPLETE SETUP FINISHED"
