@@ -334,6 +334,60 @@ Resources:
               name: AmazonCloudWatchAgent
               action: Install
 
+          - name: ValidateParameters
+            action: aws:runShellScript
+            inputs:
+              timeoutSeconds: 60
+              runCommand:
+                - '#!/bin/bash'
+                - 'set -euo pipefail'
+                - !Sub |
+                  echo "=== PARAMETER VALIDATION ==="
+                  echo "Timestamp: $(date)"
+                  echo "AWS Region: ${AWS::Region}"
+                  echo "AWS Account: ${AWS::AccountId}"
+                  echo "DB Secret ARN: {{ DBSecretArn }}"
+                  echo "DB Cluster Endpoint: {{ DBClusterEndpoint }}"
+                  echo "DB Cluster ARN: {{ DBClusterArn }}"
+                  echo "DB Name: {{ DBName }}"
+                  echo "Assets Bucket: {{ AssetsBucketName }}"
+                  echo "Assets Prefix: {{ AssetsBucketPrefix }}"
+                  echo "Home Folder: {{ HomeFolder }}"
+                  echo "Repo URL: {{ RepoUrl }}"
+                  echo ""
+                  
+                  # Validate critical parameters are not empty
+                  VALIDATION_FAILED=false
+                  
+                  if [ -z "{{ DBSecretArn }}" ]; then
+                    echo "❌ ERROR: DBSecretArn is empty"
+                    VALIDATION_FAILED=true
+                  fi
+                  
+                  if [ -z "{{ DBClusterEndpoint }}" ]; then
+                    echo "❌ ERROR: DBClusterEndpoint is empty"
+                    VALIDATION_FAILED=true
+                  fi
+                  
+                  if [ -z "{{ DBClusterArn }}" ]; then
+                    echo "❌ ERROR: DBClusterArn is empty"
+                    VALIDATION_FAILED=true
+                  fi
+                  
+                  if [ -z "{{ AssetsBucketName }}" ]; then
+                    echo "❌ ERROR: AssetsBucketName is empty"
+                    VALIDATION_FAILED=true
+                  fi
+                  
+                  if [ "$VALIDATION_FAILED" = "true" ]; then
+                    echo ""
+                    echo "❌ PARAMETER VALIDATION FAILED - Check CloudFormation parameter passing"
+                    exit 1
+                  fi
+                  
+                  echo "✅ All critical parameters validated"
+                  echo "==================================="
+
           - name: SetupEnvironment
             action: aws:runShellScript
             inputs:
