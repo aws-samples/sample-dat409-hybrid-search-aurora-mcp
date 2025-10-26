@@ -90,8 +90,7 @@ Parameters:
   
   AssetsBucketPrefix:
     Type: String
-    Default: ''
-    Description: S3 prefix for workshop assets (optional)
+    Description: S3 prefix for workshop assets (REQUIRED)
 
 Conditions:
   IsGraviton: !Or
@@ -323,10 +322,10 @@ Resources:
             default: !Ref DBName
           AssetsBucketName:
             type: String
-            default: ''
+            default: !Ref AssetsBucketName
           AssetsBucketPrefix:
             type: String
-            default: ''
+            default: !Ref AssetsBucketPrefix
         mainSteps:
           - name: InstallCloudWatchAgent
             action: aws:configurePackage
