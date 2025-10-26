@@ -771,6 +771,30 @@ INSERT INTO bedrock_integration.knowledge_base (product_id, content, content_typ
 SELECT "productId", 'Q: What is the warranty? A: 1-year manufacturer warranty.', 'product_faq',
        ARRAY['customer', 'support_agent', 'product_manager'], 'low'
 FROM target_products;
+
+-- Add support tickets
+WITH high_review_products AS (
+    SELECT "productId" FROM bedrock_integration.product_catalog WHERE reviews > 10000 LIMIT 25
+)
+INSERT INTO bedrock_integration.knowledge_base (product_id, content, content_type, persona_access, severity)
+SELECT "productId", 'Support Ticket #' || (1000 + row_number() OVER()) || ': Customer reported connectivity issues - Resolved by firmware update',
+       'support_ticket', ARRAY['support_agent', 'product_manager'], 'medium'
+FROM high_review_products;
+
+-- Add analytics
+WITH expensive_products AS (
+    SELECT "productId" FROM bedrock_integration.product_catalog WHERE price > 100 LIMIT 25
+)
+INSERT INTO bedrock_integration.knowledge_base (product_id, content, content_type, persona_access, severity)
+SELECT "productId", 'Analytics Report: Product showing 15% month-over-month growth in sales',
+       'analytics', ARRAY['product_manager'], NULL
+FROM expensive_products;
+
+-- Add general entries
+INSERT INTO bedrock_integration.knowledge_base (product_id, content, content_type, persona_access, severity) VALUES
+(NULL, 'Holiday return policy has been extended through January 31st', 'product_faq', ARRAY['customer', 'support_agent', 'product_manager'], 'low'),
+(NULL, 'System maintenance scheduled for Sunday 2:00 AM - 4:00 AM PST', 'internal_note', ARRAY['support_agent', 'product_manager'], 'medium'),
+(NULL, 'New product launch guidelines updated - please review before Q2', 'internal_note', ARRAY['product_manager'], 'high');
 SQL
     
 PRODUCT_COUNT=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM bedrock_integration.product_catalog" | xargs)
