@@ -100,7 +100,7 @@ fi
 # Setup workspace directory
 log "Setting up workspace directory..."
 mkdir -p "$HOME_FOLDER"
-# Note: lab1-hybrid-search and lab2-mcp-agent folders are pre-created in GitHub
+# Note: workshop and demo-app folders are pre-created in GitHub
 chown -R "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER"
 check_success "Workspace directory setup"
 
@@ -294,22 +294,22 @@ cat << 'EOF'
 
 🚀 Quick Start:
    1. Open Jupyter notebook:
-      lab1-hybrid-search/notebook/dat409-hybrid-search-notebook-TODO.ipynb
+      workshop/notebook/dat409-hybrid-search-TODO.ipynb
    
-   2. Follow the notebook instructions to explore hybrid search
+   2. Follow TODO blocks to build hybrid search (40 min)
    
-   3. Continue to Lab 2 for MCP integration
+   3. Explore the full-stack demo app:
+      streamlit run demo-app/streamlit_app.py
 
 🔧 Available Commands:
-   lab1      - Navigate to Lab 1 (Hybrid Search)
-   lab2      - Navigate to Lab 2 (MCP Agent)
    workshop  - Navigate to /workshop
+   demo      - Navigate to demo-app
    psql      - Connect to PostgreSQL database
 
 📁 Workshop Structure:
-   /workshop/lab1-hybrid-search/notebook/  - Lab 1 Jupyter notebook
-   /workshop/lab2-mcp-agent/               - Lab 2 Streamlit app
-   /workshop/scripts/                      - Setup scripts
+   /workshop/notebook/  - Hands-on lab with TODO blocks
+   /demo-app/           - Full-stack reference application
+   /solutions/          - Completed notebook for reference
 
 ═══════════════════════════════════════════════════════════════════
 
@@ -508,8 +508,8 @@ AWS_ACCOUNTID='$(aws sts get-caller-identity --query Account --output text 2>/de
 
 # Workshop Paths
 WORKSHOP_HOME='$HOME_FOLDER'
-LAB1_DIR='$HOME_FOLDER/lab1-hybrid-search'
-LAB2_DIR='$HOME_FOLDER/lab2-mcp-agent'
+WORKSHOP_DIR='$HOME_FOLDER/workshop'
+DEMO_APP_DIR='$HOME_FOLDER/demo-app'
 ENV_EOF
 
     chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/.env"
@@ -545,8 +545,7 @@ export DB_SECRET_ARN='$DB_SECRET_ARN'
 # Workshop shortcuts
 alias psql='psql -h \$PGHOST -p \$PGPORT -U \$PGUSER -d \$PGDATABASE'
 alias workshop='cd /workshop'
-alias lab1='cd /workshop/lab1-hybrid-search'
-alias lab2='cd /workshop/lab2-mcp-agent'
+alias demo='cd /workshop/demo-app'
 
 # Load .env file if it exists
 if [ -f /workshop/.env ]; then
@@ -721,8 +720,8 @@ CREATE INDEX IF NOT EXISTS idx_product_trgm ON bedrock_integration.product_catal
     USING GIN (product_description gin_trgm_ops);
 SQL
     
-    # Lab 2: RLS setup
-    log "Setting up Lab 2 RLS policies..."
+    # Demo App: RLS setup
+    log "Setting up Demo App RLS policies..."
     psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" << 'SQL'
 DROP TABLE IF EXISTS bedrock_integration.knowledge_base CASCADE;
 CREATE TABLE bedrock_integration.knowledge_base (
@@ -815,8 +814,8 @@ echo ""
 if [ ! -z "$PRODUCT_COUNT" ]; then
     echo "Database Status:"
     echo "  Products loaded: $PRODUCT_COUNT"
-    echo "  Lab 1: Ready for hybrid search"
-    echo "  Lab 2: RLS policies configured"
+    echo "  Workshop: Ready for hybrid search"
+    echo "  Demo App: RLS policies configured"
     echo ""
     echo "✅ Environment ready - no manual steps required!"
 else

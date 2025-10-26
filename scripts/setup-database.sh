@@ -585,51 +585,7 @@ else
     warn "Lab 2 setup encountered issues but continuing..."
 fi
 
-# ============================================================================
-# CREATE TEST SCRIPTS
-# ============================================================================
 
-log "Creating test scripts..."
-
-# Create Lab 2 test script directory
-mkdir -p /workshop/lab2-mcp-agent
-
-# Create RLS test script
-cat > /workshop/lab2-mcp-agent/test_personas.sh << 'TEST_SCRIPT'
-#!/bin/bash
-# Test RLS persona access
-
-source /workshop/.env
-
-echo "=========================================="
-echo "Testing Lab 2: RLS Persona Access"
-echo "=========================================="
-echo
-
-echo "1. CUSTOMER VIEW (public content only):"
-echo "-----------------------------------------"
-PGPASSWORD=customer123 psql -h $DB_HOST -p $DB_PORT -U customer_user -d $DB_NAME -c \
-    "SELECT content_type, COUNT(*) FROM bedrock_integration.knowledge_base GROUP BY content_type ORDER BY content_type;"
-
-echo
-echo "2. SUPPORT AGENT VIEW (public + support content):"
-echo "---------------------------------------------------"
-PGPASSWORD=agent123 psql -h $DB_HOST -p $DB_PORT -U agent_user -d $DB_NAME -c \
-    "SELECT content_type, COUNT(*) FROM bedrock_integration.knowledge_base GROUP BY content_type ORDER BY content_type;"
-
-echo
-echo "3. PRODUCT MANAGER VIEW (all content):"
-echo "---------------------------------------"
-PGPASSWORD=pm123 psql -h $DB_HOST -p $DB_PORT -U pm_user -d $DB_NAME -c \
-    "SELECT content_type, COUNT(*) FROM bedrock_integration.knowledge_base GROUP BY content_type ORDER BY content_type;"
-
-echo
-echo "=========================================="
-echo "RLS is working if each role sees different content counts"
-echo "=========================================="
-TEST_SCRIPT
-
-chmod +x /workshop/lab2-mcp-agent/test_personas.sh
 
 # ============================================================================
 # FINAL VERIFICATION
@@ -658,20 +614,16 @@ LAB2_POLICIES=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$
 echo
 log "==================== Setup Complete! ===================="
 echo
-echo "📊 LAB 1 - Hybrid Search:"
+echo "📊 Workshop - Hybrid Search:"
 echo "   ✅ Products loaded: ${LAB1_COUNT:-0}"
 echo "   ✅ Products with embeddings: ${LAB1_EMBEDDINGS:-0}"
 echo
-echo "🔒 LAB 2 - MCP with RLS:"
+echo "🎨 Demo App - MCP with RLS:"
 echo "   ✅ Knowledge base entries: ${LAB2_COUNT:-0}"
 echo "   ✅ RLS policies created: ${LAB2_POLICIES:-0}"
 echo
-echo "🔍 Test Commands:"
-echo "   Lab 1 verification:"
-echo "     psql -c \"SELECT COUNT(*) FROM bedrock_integration.product_catalog;\""
-echo
-echo "   Lab 2 RLS test:"
-echo "     /workshop/lab2-mcp-agent/test_personas.sh"
+echo "🔍 Verification:"
+echo "   psql -c \"SELECT COUNT(*) FROM bedrock_integration.product_catalog;\""
 echo
 echo "🚀 Database setup completed successfully!"
 echo "=========================================================="

@@ -497,16 +497,16 @@ Resources:
               runCommand:
                 - '#!/bin/bash'
                 - |
-                  echo "Installing Lab 1 requirements..."
-                  if [ -f "{{ HomeFolder }}/lab1-hybrid-search/requirements.txt" ]; then
-                    sudo -u participant python3.13 -m pip install --user -r "{{ HomeFolder }}/lab1-hybrid-search/requirements.txt"
-                    echo "✅ Lab 1 requirements installed"
+                  echo "Installing workshop requirements..."
+                  if [ -f "{{ HomeFolder }}/workshop/requirements.txt" ]; then
+                    sudo -u participant python3.13 -m pip install --user -r "{{ HomeFolder }}/workshop/requirements.txt"
+                    echo "✅ Workshop requirements installed"
                   fi
                   
-                  echo "Installing Lab 2 requirements..."
-                  if [ -f "{{ HomeFolder }}/lab2-mcp-agent/requirements.txt" ]; then
-                    sudo -u participant python3.13 -m pip install --user -r "{{ HomeFolder }}/lab2-mcp-agent/requirements.txt"
-                    echo "✅ Lab 2 requirements installed"
+                  echo "Installing demo app requirements..."
+                  if [ -f "{{ HomeFolder }}/demo-app/requirements.txt" ]; then
+                    sudo -u participant python3.13 -m pip install --user -r "{{ HomeFolder }}/demo-app/requirements.txt"
+                    echo "✅ Demo app requirements installed"
                   fi
 
           - name: FinalValidation
@@ -546,10 +546,10 @@ Resources:
                   # Repository check
                   echo ""
                   echo "Workshop Files:"
-                  if [ -f "/workshop/scripts/setup-database.sh" ]; then
-                    echo "  ✅ setup-database.sh present"
+                  if [ -f "{{ HomeFolder }}/workshop/notebook/dat409-hybrid-search-TODO.ipynb" ]; then
+                    echo "  ✅ Workshop notebook present"
                   else
-                    echo "  ❌ setup-database.sh missing"
+                    echo "  ⚠️  Workshop notebook not found"
                   fi
                   
                   # Overall validation - be more lenient
@@ -582,7 +582,7 @@ Resources:
                     echo "📘 Next Steps:"
                     echo "  1. Access Code Editor via CloudFront URL"
                     echo "  2. Database is pre-loaded and ready to use"
-                    echo "  3. Open lab1-hybrid-search/notebook/dat409-hybrid-search-notebook.ipynb"
+                    echo "  3. Open workshop/notebook/dat409-hybrid-search-TODO.ipynb"
                     exit 0
                   else
                     echo ""
