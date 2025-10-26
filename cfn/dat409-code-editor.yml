@@ -351,6 +351,7 @@ Resources:
                   echo "DB Name: {{ DBName }}"
                   echo "Assets Bucket: {{ AssetsBucketName }}"
                   echo "Assets Prefix: {{ AssetsBucketPrefix }}"
+                  echo "S3 Path: s3://{{ AssetsBucketName }}/{{ AssetsBucketPrefix }}amazon-products-sample-with-cohere-embeddings.csv"
                   echo "Home Folder: {{ HomeFolder }}"
                   echo "Repo URL: {{ RepoUrl }}"
                   echo ""

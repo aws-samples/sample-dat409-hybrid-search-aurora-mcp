@@ -632,9 +632,14 @@ SQL
 
 # Download pre-generated embeddings from S3 (MANDATORY)
 DATA_FILE="/tmp/amazon-products-sample-with-cohere-embeddings.csv"
+
+# Construct S3 path (Workshop Studio guarantees both parameters)
+S3_PATH="s3://${ASSETS_BUCKET}/${ASSETS_PREFIX}amazon-products-sample-with-cohere-embeddings.csv"
 log "Downloading product data with embeddings from S3..."
-if ! aws s3 cp "s3://${ASSETS_BUCKET}/${ASSETS_PREFIX}amazon-products-sample-with-cohere-embeddings.csv" "$DATA_FILE"; then
-    error "Failed to download CSV from S3. Check: 1) ASSETS_BUCKET='$ASSETS_BUCKET' 2) IAM permissions 3) File exists in S3"
+log "S3 Path: $S3_PATH"
+
+if ! aws s3 cp "$S3_PATH" "$DATA_FILE"; then
+    error "Failed to download CSV from S3. Check: 1) ASSETS_BUCKET='$ASSETS_BUCKET' 2) ASSETS_PREFIX='$ASSETS_PREFIX' 3) IAM permissions 4) File exists at: $S3_PATH"
 fi
 
 if [ ! -f "$DATA_FILE" ] || [ ! -s "$DATA_FILE" ]; then
