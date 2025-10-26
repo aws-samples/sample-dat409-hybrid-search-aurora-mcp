@@ -650,15 +650,12 @@ log "✅ Downloaded pre-generated embeddings from S3 ($(wc -l < $DATA_FILE) line
     
 # Load data using Python
 log "Loading product data into database (this may take 2-3 minutes)..."
+# Install psycopg system-wide for root user (data loading runs as root)
+python3.13 -m pip install psycopg psycopg-binary 2>&1 | grep -v "WARNING: Running pip as the 'root' user" || true
+
 python3.13 << 'PYTHON'
 import os, csv, json, sys
-try:
-    import psycopg
-except ImportError:
-    print("ERROR: psycopg not found, installing...")
-    import subprocess
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--user', 'psycopg', 'psycopg-binary'])
-    import psycopg
+import psycopg
 
 conn = psycopg.connect(
     host=os.environ['DB_HOST'],
