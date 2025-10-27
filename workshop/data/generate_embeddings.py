@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate embeddings for amazon-products-sample-clean.csv
+Generate embeddings for amazon-products-sample.csv
 Output: amazon-products-sample-with-cohere-embeddings.csv
 """
 import os
@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 # Configuration
 AWS_REGION = os.getenv('AWS_REGION', 'us-west-2')
-INPUT_FILE = 'amazon-products-sample-clean.csv'
+INPUT_FILE = 'amazon-products-sample.csv'
 OUTPUT_FILE = 'amazon-products-sample-with-cohere-embeddings.csv'
 
 # Initialize Bedrock client
