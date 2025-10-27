@@ -546,7 +546,7 @@ Resources:
                   # Repository check
                   echo ""
                   echo "Workshop Files:"
-                  if [ -f "{{ HomeFolder }}/workshop/notebook/dat409-hybrid-search-TODO.ipynb" ]; then
+                  if [ -f "{{ HomeFolder }}/workshop/notebooks/dat409-hybrid-search-TODO.ipynb" ]; then
                     echo "  ✅ Workshop notebook present"
                   else
                     echo "  ⚠️  Workshop notebook not found"
@@ -582,7 +582,7 @@ Resources:
                     echo "📘 Next Steps:"
                     echo "  1. Access Code Editor via CloudFront URL"
                     echo "  2. Database is pre-loaded and ready to use"
-                    echo "  3. Open workshop/notebook/dat409-hybrid-search-TODO.ipynb"
+                    echo "  3. Open workshop/notebooks/dat409-hybrid-search-TODO.ipynb"
                     exit 0
                   else
                     echo ""

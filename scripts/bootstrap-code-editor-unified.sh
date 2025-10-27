@@ -294,7 +294,7 @@ cat << 'EOF'
 
 🚀 Quick Start:
    1. Open Jupyter notebook:
-      workshop/notebook/dat409-hybrid-search-TODO.ipynb
+      workshop/notebooks/dat409-hybrid-search-TODO.ipynb
    
    2. Follow TODO blocks to build hybrid search (40 min)
    
@@ -307,7 +307,7 @@ cat << 'EOF'
    psql      - Connect to PostgreSQL database
 
 📁 Workshop Structure:
-   /workshop/notebook/  - Hands-on lab with TODO blocks
+   /workshop/notebooks/ - Hands-on lab with TODO blocks
    /demo-app/           - Full-stack reference application
    /solutions/          - Completed notebook for reference
 
