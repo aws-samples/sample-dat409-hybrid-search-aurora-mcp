@@ -479,7 +479,7 @@ fi
 # Create .env file for easy sourcing
 if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
     log "Creating .env file..."
-    cat > "$HOME_FOLDER/.env" << ENV_EOF
+    cat > "$HOME_FOLDER/workshop/.env" << ENV_EOF
 # DAT409 Workshop Environment Variables
 DB_HOST='$DB_HOST'
 DB_PORT='$DB_PORT'
@@ -512,8 +512,8 @@ WORKSHOP_DIR='$HOME_FOLDER/workshop'
 DEMO_APP_DIR='$HOME_FOLDER/demo-app'
 ENV_EOF
 
-    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/.env"
-    chmod 600 "$HOME_FOLDER/.env"
+    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/workshop/.env"
+    chmod 600 "$HOME_FOLDER/workshop/.env"
     
     # Create .pgpass file
     cat > "/home/$CODE_EDITOR_USER/.pgpass" << PGPASS_EOF
