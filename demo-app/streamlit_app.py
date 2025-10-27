@@ -1603,6 +1603,8 @@ with tab1:
         - Enables cross-tenant analytics while maintaining security
         """)
     
+    st.info("💡 **Time-Based Filtering:** MCP agents can combine persona and temporal filters: `WHERE created_at > NOW() - INTERVAL '7 days' AND 'support_agent' = ANY(persona_access)`")
+    
     with st.expander("🤝 Why Strands + MCP?", expanded=False):
         st.markdown("""
         **Strands Agent Framework:**
@@ -2212,6 +2214,39 @@ LIMIT 10;
     st.success("""
     🎯 **Key Insight:** MCP shifts from relevance-based retrieval (RAG) to structured, queryable, context-rich inputs. Agents dynamically select retrieval strategies (vector, keyword, SQL filters) based on query intent—enabling time-based, persona-based, and operational context filtering impossible with static embeddings alone.
     """)
+    
+    st.markdown("---")
+    
+    # Structured Query Filters
+    st.markdown("## 🔍 MCP-Enabled Query Filters")
+    st.caption("How MCP enables structured SQL filters that RAG cannot handle")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Traditional RAG:**")
+        st.code("""
+-- Fixed: Only embedding similarity
+SELECT * FROM products
+ORDER BY embedding <=> query_vector
+LIMIT 10;
+""", language="sql")
+        st.caption("❌ No price, category, or rating filters")
+    
+    with col2:
+        st.markdown("**MCP-Enabled Search:**")
+        st.code("""
+-- Dynamic: Structured filters + vectors
+SELECT * FROM products
+WHERE price BETWEEN 50 AND 200
+  AND category_name = 'Electronics'
+  AND stars >= 4.0
+ORDER BY embedding <=> query_vector
+LIMIT 10;
+""", language="sql")
+        st.caption("✅ Combines semantic search with business logic")
+    
+    st.info("💡 **Key Advantage:** MCP agents can dynamically construct WHERE clauses based on user intent, enabling precise filtering impossible with static embeddings.")
     
     st.markdown("---")
     
