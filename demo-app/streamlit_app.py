@@ -2208,8 +2208,7 @@ with tab4:
         """)
     
     st.success("""
-    🎯 **Key Insight:** MCP enables agents to intelligently choose retrieval strategies based on query type, 
-    rather than forcing all queries through the same embedding pipeline.
+    🎯 **Key Insight:** MCP shifts from relevance-based retrieval (RAG) to structured, queryable, context-rich inputs. Agents dynamically select retrieval strategies (vector, keyword, SQL filters) based on query intent—enabling time-based, persona-based, and operational context filtering impossible with static embeddings alone.
     """)
     
     st.markdown("---")
