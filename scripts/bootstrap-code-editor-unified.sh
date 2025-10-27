@@ -383,10 +383,10 @@ log "==================== Installing Python Packages ===================="
 
 # Note: Requirements will be installed after repository clone
 log "Core Python packages will be installed..."
-sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user --upgrade pip setuptools wheel
+sudo -u "$CODE_EDITOR_USER" PIP_NO_WARN_SCRIPT_LOCATION=1 python3.13 -m pip install --user --upgrade pip setuptools wheel
 
 log "Installing essential packages for both labs..."
-sudo -u "$CODE_EDITOR_USER" python3.13 -m pip install --user \
+sudo -u "$CODE_EDITOR_USER" PIP_NO_WARN_SCRIPT_LOCATION=1 python3.13 -m pip install --user \
     boto3 psycopg psycopg-binary pgvector pandas numpy matplotlib seaborn tqdm \
     jupyterlab jupyter ipywidgets notebook python-dotenv streamlit plotly pillow requests
 
