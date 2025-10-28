@@ -517,6 +517,11 @@ ENV_EOF
 
     chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$MASTER_ENV"
     chmod 600 "$MASTER_ENV"
+    log "  ✓ Created $HOME_FOLDER/.env"
+    
+    # Create directories if they don't exist (repo may not be cloned yet)
+    mkdir -p "$HOME_FOLDER/notebooks"
+    mkdir -p "$HOME_FOLDER/demo-app"
     
     # Create .env in notebooks directory (for Jupyter)
     cp "$MASTER_ENV" "$HOME_FOLDER/notebooks/.env"
