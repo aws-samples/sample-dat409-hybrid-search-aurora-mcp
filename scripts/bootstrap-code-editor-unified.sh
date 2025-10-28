@@ -294,7 +294,7 @@ cat << 'EOF'
 
 🚀 Quick Start:
    1. Open Jupyter notebook:
-      workshop/notebooks/dat409-hybrid-search-TODO.ipynb
+      notebooks/dat409-hybrid-search-TODO.ipynb
    
    2. Follow TODO blocks to build hybrid search (40 min)
    
@@ -308,8 +308,8 @@ cat << 'EOF'
 
 📁 Workshop Structure:
    /workshop/notebooks/ - Hands-on lab with TODO blocks
-   /demo-app/           - Full-stack reference application
-   /solutions/          - Completed notebook for reference
+   /workshop/demo-app/  - Full-stack reference application
+   /workshop/data/      - Product dataset
 
 ═══════════════════════════════════════════════════════════════════
 
@@ -480,8 +480,9 @@ fi
 if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
     log "Creating .env files..."
     
-    # Create .env in workshop directory (for notebooks)
-    cat > "$HOME_FOLDER/workshop/.env" << ENV_EOF
+    # Create master .env file
+    MASTER_ENV="$HOME_FOLDER/.env"
+    cat > "$MASTER_ENV" << ENV_EOF
 # DAT409 Workshop Environment Variables
 DB_HOST='$DB_HOST'
 DB_PORT='$DB_PORT'
@@ -514,18 +515,20 @@ WORKSHOP_DIR='$HOME_FOLDER/workshop'
 DEMO_APP_DIR='$HOME_FOLDER/demo-app'
 ENV_EOF
 
-    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/workshop/.env"
-    chmod 600 "$HOME_FOLDER/workshop/.env"
+    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$MASTER_ENV"
+    chmod 600 "$MASTER_ENV"
     
-    # Create .env in root workshop folder (for easy access)
-    cp "$HOME_FOLDER/workshop/.env" "$HOME_FOLDER/.env"
-    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/.env"
-    chmod 600 "$HOME_FOLDER/.env"
+    # Create .env in notebooks directory (for Jupyter)
+    cp "$MASTER_ENV" "$HOME_FOLDER/notebooks/.env"
+    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/notebooks/.env"
+    chmod 600 "$HOME_FOLDER/notebooks/.env"
+    log "  ✓ Created $HOME_FOLDER/notebooks/.env"
     
     # Create .env in demo-app directory (for Streamlit)
-    cp "$HOME_FOLDER/workshop/.env" "$HOME_FOLDER/demo-app/.env"
+    cp "$MASTER_ENV" "$HOME_FOLDER/demo-app/.env"
     chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/demo-app/.env"
     chmod 600 "$HOME_FOLDER/demo-app/.env"
+    log "  ✓ Created $HOME_FOLDER/demo-app/.env"
     
     # Create .pgpass file
     cat > "/home/$CODE_EDITOR_USER/.pgpass" << PGPASS_EOF

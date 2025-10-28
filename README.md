@@ -32,21 +32,20 @@ Build production-grade hybrid search combining pgvector semantic similarity, Pos
 ## 📁 Repository Structure
 
 ```
-├── workshop/
-│   ├── notebooks/
-│   │   ├── dat409-hybrid-search-TODO.ipynb      # Hands-on lab with TODO blocks
-│   │   └── dat409-hybrid-search-SOLUTIONS.ipynb # Reference implementation
-│   ├── data/
-│   │   └── amazon-products-sample.csv           # 21,704 product dataset
-│   └── requirements.txt
+├── notebooks/
+│   ├── dat409-hybrid-search-TODO.ipynb      # Hands-on lab with TODO blocks
+│   └── dat409-hybrid-search-SOLUTIONS.ipynb # Reference implementation
+├── data/
+│   └── amazon-products-sample.csv           # 21,704 product dataset
 ├── demo-app/
-│   ├── streamlit_app.py                         # Full-stack reference application
+│   ├── streamlit_app.py                     # Full-stack reference application
 │   ├── requirements.txt
 │   └── .streamlit/config.toml
 ├── scripts/
-│   ├── bootstrap-code-editor-unified.sh         # Environment setup
+│   ├── bootstrap-code-editor-unified.sh     # Environment setup
 │   └── setup/test_connection.py
-└── cfn/                                         # CloudFormation templates
+├── cfn/                                     # CloudFormation templates
+└── requirements.txt                         # Workshop dependencies
 ```
 
 ## 🎯 Workshop Structure
@@ -68,7 +67,7 @@ Build production-grade hybrid search combining pgvector semantic similarity, Pos
 
 **Hands-On:**
 ```bash
-cd /workshop/notebooks
+cd /notebooks
 # Open dat409-hybrid-search-TODO.ipynb
 # Complete 3 TODO blocks (6 sub-tasks total)
 ```
@@ -115,7 +114,7 @@ streamlit run streamlit_app.py
 
 **For AWS re:Invent Participants:**
 1. Access Code Editor via provided CloudFront URL
-2. Navigate to `/workshop/notebooks/`
+2. Navigate to `/notebooks/`
 3. Open `dat409-hybrid-search-TODO.ipynb`
 4. Complete 3 TODO blocks (guided with hints)
 5. Launch demo app: `streamlit run demo-app/streamlit_app.py`
