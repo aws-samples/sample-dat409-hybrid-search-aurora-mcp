@@ -484,6 +484,18 @@ Resources:
                       
                       chown -R participant:participant "{{ HomeFolder }}"
                       
+                      # Copy .env files to subdirectories after repo clone
+                      if [ -f "{{ HomeFolder }}/.env" ]; then
+                        echo "Copying .env files to subdirectories..."
+                        cp "{{ HomeFolder }}/.env" "{{ HomeFolder }}/notebooks/.env" 2>/dev/null || true
+                        cp "{{ HomeFolder }}/.env" "{{ HomeFolder }}/demo-app/.env" 2>/dev/null || true
+                        chown participant:participant "{{ HomeFolder }}/notebooks/.env" 2>/dev/null || true
+                        chown participant:participant "{{ HomeFolder }}/demo-app/.env" 2>/dev/null || true
+                        chmod 600 "{{ HomeFolder }}/notebooks/.env" 2>/dev/null || true
+                        chmod 600 "{{ HomeFolder }}/demo-app/.env" 2>/dev/null || true
+                        echo "✅ .env files copied to notebooks/ and demo-app/"
+                      fi
+                      
                       echo "✅ Repository cloned successfully"
                     else
                       echo "WARNING: Repository clone failed"

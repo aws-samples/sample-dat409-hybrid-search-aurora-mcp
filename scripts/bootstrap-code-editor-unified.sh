@@ -517,23 +517,8 @@ ENV_EOF
 
     chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$MASTER_ENV"
     chmod 600 "$MASTER_ENV"
-    log "  ✓ Created $HOME_FOLDER/.env"
-    
-    # Create directories if they don't exist (repo may not be cloned yet)
-    mkdir -p "$HOME_FOLDER/notebooks"
-    mkdir -p "$HOME_FOLDER/demo-app"
-    
-    # Create .env in notebooks directory (for Jupyter)
-    cp "$MASTER_ENV" "$HOME_FOLDER/notebooks/.env"
-    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/notebooks/.env"
-    chmod 600 "$HOME_FOLDER/notebooks/.env"
-    log "  ✓ Created $HOME_FOLDER/notebooks/.env"
-    
-    # Create .env in demo-app directory (for Streamlit)
-    cp "$MASTER_ENV" "$HOME_FOLDER/demo-app/.env"
-    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/demo-app/.env"
-    chmod 600 "$HOME_FOLDER/demo-app/.env"
-    log "  ✓ Created $HOME_FOLDER/demo-app/.env"
+    log "  ✓ Created $HOME_FOLDER/.env (master copy)"
+    log "  Note: notebooks/.env and demo-app/.env will be created after repo clone"
     
     # Create .pgpass file
     cat > "/home/$CODE_EDITOR_USER/.pgpass" << PGPASS_EOF
