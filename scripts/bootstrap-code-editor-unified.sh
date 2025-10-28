@@ -478,7 +478,9 @@ fi
 
 # Create .env file for easy sourcing
 if [ ! -z "$DB_HOST" ] && [ ! -z "$DB_USER" ] && [ ! -z "$DB_PASSWORD" ]; then
-    log "Creating .env file..."
+    log "Creating .env files..."
+    
+    # Create .env in workshop directory (for notebooks)
     cat > "$HOME_FOLDER/workshop/.env" << ENV_EOF
 # DAT409 Workshop Environment Variables
 DB_HOST='$DB_HOST'
@@ -514,6 +516,16 @@ ENV_EOF
 
     chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/workshop/.env"
     chmod 600 "$HOME_FOLDER/workshop/.env"
+    
+    # Create .env in root workshop folder (for easy access)
+    cp "$HOME_FOLDER/workshop/.env" "$HOME_FOLDER/.env"
+    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/.env"
+    chmod 600 "$HOME_FOLDER/.env"
+    
+    # Create .env in demo-app directory (for Streamlit)
+    cp "$HOME_FOLDER/workshop/.env" "$HOME_FOLDER/demo-app/.env"
+    chown "$CODE_EDITOR_USER:$CODE_EDITOR_USER" "$HOME_FOLDER/demo-app/.env"
+    chmod 600 "$HOME_FOLDER/demo-app/.env"
     
     # Create .pgpass file
     cat > "/home/$CODE_EDITOR_USER/.pgpass" << PGPASS_EOF
