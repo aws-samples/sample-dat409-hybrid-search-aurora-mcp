@@ -294,7 +294,7 @@ cat << 'EOF'
 
 🚀 Quick Start:
    1. Open Jupyter notebook:
-      notebooks/dat409-hybrid-search-TODO.ipynb
+      notebooks/01-dat409-hybrid-search-TODO.ipynb
    
    2. Follow TODO blocks to build hybrid search (40 min)
    
