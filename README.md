@@ -237,6 +237,16 @@ MCP enables agents to dynamically select retrieval strategies (vector, keyword, 
 - [ ] Connection pooling (PgBouncer/RDS Proxy)
 - [ ] RLS policies and IAM authentication
 - [ ] Audit logging enabled
+- [ ] Monitoring and observability (see below)
+
+**Monitoring & Observability:**
+
+For production deployments, monitor search performance and database health:
+- **[Database Insights](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_DatabaseInsights.html)**: Track query latency, top SQL statements, and database load in real-time
+- **CloudWatch Metrics**: Monitor custom metrics for search method usage (semantic vs keyword vs fuzzy) and result quality
+- **Application Logging**: Log search queries, response times, and result counts for analysis and optimization
+
+> 💡 **Note:** Advanced vector optimization techniques (Product Quantization, Scalar Quantization) are covered in the companion session **DAT406 - Build Agentic AI powered search with Amazon Aurora and Amazon RDS**
 
 ---
 
