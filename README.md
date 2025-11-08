@@ -115,6 +115,29 @@ streamlit run streamlit_app.py
 - ✅ MCP server (awslabs.postgres-mcp-server)
 - ✅ Strands Agent Framework + Claude Sonnet 4
 
+## 💰 Cost Considerations
+
+**Bedrock Pricing (us-west-2):**
+- **Cohere Embed v3**: $0.0001 per 1K tokens
+  - Workshop dataset: ~$2.17 for 21,704 products (one-time)
+  - Production: Pre-generate embeddings to avoid repeated costs
+- **Cohere Rerank v3.5**: $0.002 per search
+  - ~$2 per 1,000 searches
+  - Use for user-facing search where accuracy is critical
+
+**Cost Optimization Strategies:**
+- ✅ **Pre-generate embeddings**: One-time cost vs per-query cost
+- ✅ **Cache rerank results**: Redis with 1-hour TTL (reduces 80%+ of rerank calls)
+- ✅ **Use RRF for internal tools**: Zero cost, in-database fusion
+- ✅ **Batch embedding generation**: Process in batches of 96 texts (Cohere limit)
+
+**When to Use What:**
+- **Cohere Rerank**: Customer-facing search, high-value queries (~$0.002/search)
+- **RRF**: Internal tools, high-volume, cost-sensitive (~$0/search)
+- **Hybrid without rerank**: Balance of accuracy and cost
+
+---
+
 ## 🛠️ Technology Stack
 
 | Component | Technology | Purpose |

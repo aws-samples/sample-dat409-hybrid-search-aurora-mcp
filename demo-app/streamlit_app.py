@@ -2295,6 +2295,67 @@ LIMIT 10;
     
     st.markdown("---")
     
+    # Security Deep Dive
+    with st.expander("🔐 Security Deep Dive: RLS Implementation Patterns", expanded=False):
+        st.markdown("""
+        ### Application-Level vs Database-Level RLS
+        
+        **This Workshop (Application-Level):**
+        ```python
+        # System prompt enforces filtering
+        WHERE '{persona}' = ANY(persona_access)
+        ```
+        - Agent connects as admin user
+        - Security logic in system prompt
+        - Works with RDS Data API (serverless)
+        
+        **Traditional (Database-Level):**
+        ```sql
+        CREATE POLICY customer_policy ON knowledge_base
+            FOR SELECT
+            USING ('customer' = ANY(persona_access));
+        ```
+        - Each persona has dedicated DB user
+        - PostgreSQL enforces filtering automatically
+        - Requires VPC connection pooling
+        
+        ### Security Comparison
+        """)
+        
+        security_df = pd.DataFrame({
+            "Aspect": ["Enforcement", "Connection Pool", "Data API Support", "Cross-Tenant Queries", "Best For"],
+            "Application-Level": ["System Prompt", "Simple (single user)", "✅ Yes", "✅ Possible", "AI agents, MCP"],
+            "Database-Level": ["PostgreSQL RLS", "Complex (per-user)", "❌ No", "❌ Limited", "Direct user access"]
+        })
+        
+        st.dataframe(security_df, hide_index=True, use_container_width=True)
+        
+        st.markdown("""
+        ### Testing RLS Filtering
+        
+        **Verify persona access:**
+        ```sql
+        -- Customer should only see product_faq
+        SELECT DISTINCT content_type 
+        FROM knowledge_base 
+        WHERE 'customer' = ANY(persona_access);
+        -- Returns: product_faq
+        
+        -- Support agent sees more
+        SELECT DISTINCT content_type 
+        FROM knowledge_base 
+        WHERE 'support_agent' = ANY(persona_access);
+        -- Returns: product_faq, support_ticket, internal_note
+        ```
+        
+        **Production Recommendation:**
+        - Use application-level for AI agents (this workshop pattern)
+        - Use database-level for direct user queries
+        - Combine both for defense-in-depth
+        """)
+    
+    st.markdown("---")
+    
     # Production Checklist
     st.markdown("## ✅ Production Deployment Checklist")
     
