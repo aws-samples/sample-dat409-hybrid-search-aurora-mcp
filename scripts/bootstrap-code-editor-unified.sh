@@ -234,7 +234,7 @@ install_vscode_extension "ms-toolsai.vscode-jupyter-cell-tags" "Jupyter Cell Tag
 install_vscode_extension "ms-toolsai.jupyter-keymap" "Jupyter Keymap"
 install_vscode_extension "ms-toolsai.jupyter-renderers" "Jupyter Renderers"
 install_vscode_extension "amazonwebservices.aws-toolkit-vscode" "AWS Toolkit"
-install_vscode_extension "amazonwebservices.amazon-q-vscode" "Amazon Q"
+# Note: Amazon Q extension removed to avoid Builder ID sign-in during workshop
 
 # Configure VS Code settings
 log "Configuring VS Code settings..."
@@ -267,7 +267,6 @@ cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
     "git.decorations.enabled": false,
     "scm.diffDecorations": "none",
     "aws.telemetry": false,
-    "amazonQ.telemetry": false,
     "extensions.autoUpdate": false,
     "telemetry.telemetryLevel": "off"
 }
