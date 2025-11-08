@@ -138,21 +138,14 @@ streamlit run streamlit_app.py
 
 ---
 
-## 🛠️ Technology Stack
+## 🛠️ AWS Services
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Database** | Aurora PostgreSQL 17.5 | Vector storage with pgvector extension |
-| **Vector Index** | HNSW (pgvector) | Fast ANN search with 95%+ recall |
-| **Embeddings** | Cohere Embed English v3 | 1024-dimensional dense vectors |
-| **Full-Text** | PostgreSQL `tsvector` + GIN | Lexical search and BM25-style ranking |
-| **Fuzzy Match** | pg_trgm + GIN | Trigram similarity for typo tolerance |
-| **MCP Server** | `awslabs.postgres-mcp-server` | Standardized database access tools |
-| **AI Agent** | Strands Agent Framework | Tool-calling orchestration layer |
-| **LLM** | Claude Sonnet 4 | Natural language → SQL translation |
-| **RLS** | PostgreSQL Row-Level Security | Declarative multi-tenancy |
-| **Data API** | Aurora Data API | Serverless, IAM-authenticated access |
-| **Python** | 3.13 (pandas, psycopg3, boto3) | Data loading and orchestration |
+| Service | Purpose |
+|---------|----------|
+| **Amazon Aurora PostgreSQL** | Vector storage with pgvector 0.8.0 extension |
+| **Amazon Bedrock** | Cohere Embed v3 (embeddings), Rerank v3.5 (ML reranking) |
+| **RDS Data API** | Serverless, IAM-authenticated database access |
+| **Claude Sonnet 4** | Natural language → SQL translation via Bedrock |
 
 ## 🤖 Why MCP Matters: Beyond RAG
 
