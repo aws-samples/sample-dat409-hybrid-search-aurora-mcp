@@ -229,7 +229,6 @@ MCP enables agents to dynamically select retrieval strategies (vector, keyword, 
 1. Add time-based filtering (`WHERE created_at > NOW() - INTERVAL '7 days'`)
 2. Implement query caching (Redis/ElastiCache)
 3. Build custom MCP tools for your domain
-4. Integrate with Amazon Kendra
 
 **Production Checklist:**
 - [ ] HNSW indexes on vector columns
@@ -246,7 +245,7 @@ For production deployments, monitor search performance and database health:
 - **CloudWatch Metrics**: Monitor custom metrics for search method usage (semantic vs keyword vs fuzzy) and result quality
 - **Application Logging**: Log search queries, response times, and result counts for analysis and optimization
 
-> 💡 **Note:** Advanced vector optimization techniques (Product Quantization, Scalar Quantization) are covered in the companion session **DAT406 - Build Agentic AI powered search with Amazon Aurora and Amazon RDS**
+> 💡 **Note:** Advanced vector optimization techniques (Binary Quantization, Scalar Quantization) are covered in the companion session **DAT406 - Build Agentic AI powered search with Amazon Aurora and Amazon RDS**
 
 ---
 
