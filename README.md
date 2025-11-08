@@ -22,12 +22,12 @@
 
 **Duration**: 60 minutes | **Level**: 400 (Expert)
 
-Build production-grade hybrid search combining pgvector semantic similarity, PostgreSQL full-text search, and trigram fuzzy matching. Implement Model Context Protocol (MCP) for context-aware retrieval with persona-based Row-Level Security—enabling AI agents to query structured data beyond traditional RAG embeddings.
+Build production-grade hybrid search combining semantic vectors, full-text search, and fuzzy matching. Implement Model Context Protocol (MCP) for context-aware retrieval with persona-based security—enabling AI agents to query structured data beyond traditional RAG.
 
 **What You'll Build:**
-- Weighted hybrid search with three complementary retrieval methods
+- Hybrid search with fuzzy, semantic, and RRF methods
 - MCP-based agent with intelligent database querying
-- Context-aware filtering (persona-based, time-based, operational)
+- Context-aware filtering with Row-Level Security
 
 ## 📁 Repository Structure
 
@@ -52,49 +52,37 @@ Build production-grade hybrid search combining pgvector semantic similarity, Pos
 
 ### Hands-On Lab: Hybrid Search Implementation (40 min)
 
-**Implement weighted hybrid search with three complementary retrieval methods:**
+**Complete 3 TODO blocks implementing:**
 
-| Method | Technology | Use Case | MCP Context |
-|--------|-----------|----------|-------------|
-| **Fuzzy** | pg_trgm + GIN | Typo tolerance ("wireles hedphones") | Handles user input errors without re-prompting |
-| **Semantic** | pgvector + HNSW + Cohere | Conceptual queries ("eco-friendly products") | Captures intent beyond keyword matching |
-| **Hybrid RRF** | Reciprocal Rank Fusion | Multi-signal fusion | Combines retrieval signals without ML overhead |
-
-**What You'll Implement:**
-- **TODO 1**: Fuzzy search with trigram similarity
-- **TODO 2**: Semantic search with pgvector and Cohere embeddings
-- **TODO 3**: Hybrid RRF combining semantic + keyword + fuzzy
+| Method | Technology | Use Case |
+|--------|-----------|----------|
+| **Fuzzy** | pg_trgm + GIN | Typo tolerance ("wireles hedphones") |
+| **Semantic** | pgvector + HNSW + Cohere | Conceptual queries ("eco-friendly products") |
+| **Hybrid RRF** | Reciprocal Rank Fusion | Multi-signal fusion without ML overhead |
 
 **Hands-On:**
 ```bash
 cd /notebooks
 # Open 01-dat409-hybrid-search-TODO.ipynb
-# Complete 3 TODO blocks (6 sub-tasks total)
 ```
 
 **Key Learning:**
-- When to use semantic vs keyword vs fuzzy search
-- Index strategies for production (HNSW vs IVFFlat)
-- RRF vs weighted fusion for heterogeneous score distributions
-- Cohere Rerank for ML-based result optimization
+- When to use each search method
+- HNSW vs IVFFlat index strategies
+- RRF vs weighted fusion
+- Cohere Rerank for ML-based optimization
 
 ---
 
 ### Interactive Demo: MCP-Based Retrieval (20 min)
 
-**Explore how MCP shifts from RAG to structured, queryable inputs:**
+**Explore MCP-enabled context-aware search:**
 
 ```
-User Query → Strands Agent (Claude Sonnet 4) → MCP Tools → Aurora PostgreSQL
-                    ↓                              ↓              ↓
-            Tool Selection                    SQL Query      RLS-Filtered Results
+User Query → Claude Sonnet 4 → MCP Tools → Aurora PostgreSQL
+                ↓                  ↓              ↓
+         Tool Selection        SQL Query    RLS-Filtered Results
 ```
-
-**What You'll Explore:**
-- **Tab 1**: MCP Context Search with persona-based RLS
-- **Tab 2**: Search method comparison (side-by-side)
-- **Tab 3**: Advanced analysis (optional)
-- **Tab 4**: Key takeaways and production decisions
 
 **Hands-On:**
 ```bash
@@ -103,9 +91,9 @@ streamlit run streamlit_app.py
 ```
 
 **Key Learning:**
-- MCP enables dynamic retrieval strategy selection
-- Application-level RLS for multi-tenant AI agents
-- Cohere Rerank vs RRF (ML vs mathematical)
+- Dynamic retrieval strategy selection
+- Persona-based RLS for multi-tenant agents
+- Cohere Rerank vs RRF comparison
 - Production deployment patterns
 
 ---
@@ -147,43 +135,30 @@ streamlit run streamlit_app.py
 
 **MCP shifts from relevance-based retrieval (RAG) to structured, queryable, context-rich inputs.**
 
-### Traditional RAG Limitations
-- ❌ Fixed retrieval patterns (always embedding-based)
-- ❌ No query-time filtering (time, persona, operational context)
-- ❌ Static embeddings only
-- ❌ Limited multi-step reasoning
+### Traditional RAG vs MCP
 
-### MCP Advantages
-- ✅ Dynamic tool selection (vector, keyword, SQL filters)
-- ✅ Context-aware filtering (persona-based, time-based)
-- ✅ Hybrid retrieval strategies
-- ✅ Direct structured data access
+| RAG | MCP |
+|-----|-----|
+| ❌ Fixed retrieval patterns | ✅ Dynamic tool selection |
+| ❌ No query-time filtering | ✅ Context-aware filtering |
+| ❌ Static embeddings only | ✅ Hybrid retrieval strategies |
+| ❌ Limited multi-step reasoning | ✅ Direct structured data access |
 
 ### Architecture
 
 ```
-User Query → Strands Agent (Claude Sonnet 4) → MCP Tools → Aurora PostgreSQL
-                    ↓                              ↓              ↓
-            Analyzes Intent                   SQL Query      RLS-Filtered Results
-            Selects Tools                     run_query      WHERE persona = ANY(access)
-            Synthesizes Response              get_schema     Returns authorized data
+User Query → Claude Sonnet 4 → MCP Tools → Aurora PostgreSQL
+                ↓                  ↓              ↓
+         Analyzes Intent      SQL Query    RLS-Filtered Results
+         Selects Tools        run_query    WHERE persona = ANY(access)
 ```
 
 **Key Components:**
-
-| Component | Role | Technology |
-|-----------|------|------------|
-| **Strands Agent** | Orchestration & tool calling | Python framework |
-| **Claude Sonnet 4** | Natural language → SQL | Amazon Bedrock |
-| **MCP Client** | Standardized database tools | `awslabs.postgres-mcp-server` |
-| **Aurora Data API** | Serverless database access | IAM authentication |
-| **RLS (Application-Level)** | Security via system prompt | PostgreSQL + Agent logic |
-
-**Production Pattern:**
-- Agent uses admin credentials (standard for AI agents)
-- Security enforced via system prompt filtering
-- Data API enables serverless access (no VPC)
-- ~10ms latency acceptable for agentic workflows
+- **Strands Agent**: Orchestration & tool calling
+- **Claude Sonnet 4**: Natural language → SQL translation
+- **MCP Client**: Standardized database tools (`awslabs.postgres-mcp-server`)
+- **Aurora Data API**: Serverless, IAM-authenticated access
+- **RLS**: Application-level security via system prompt
 
 ## 🎯 Key Takeaways
 
@@ -206,9 +181,9 @@ User Query → Strands Agent (Claude Sonnet 4) → MCP Tools → Aurora PostgreS
 - **Cohere Rerank**: User-facing search, accuracy critical (~50-200ms latency, cost per request)
 - **RRF**: Internal tools, cost-sensitive, low-latency (in-database, zero cost)
 
-### MCP for AI Agents
+### Key Insight
 
-**Key Insight:** MCP enables agents to dynamically select retrieval strategies (vector, keyword, SQL filters) based on query intent—enabling time-based, persona-based, and operational context filtering impossible with static embeddings alone.
+MCP enables agents to dynamically select retrieval strategies (vector, keyword, SQL filters) based on query intent—enabling time-based, persona-based, and operational context filtering impossible with static embeddings alone.
 
 ---
 
@@ -225,22 +200,19 @@ User Query → Strands Agent (Claude Sonnet 4) → MCP Tools → Aurora PostgreS
 - [RDS Data API](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html) - Serverless access
 - [Strands Agent Framework](https://strandsagents.com/) - MCP-compatible agents
 
-## 🚀 Extend This Workshop
+## 🚀 Next Steps
 
-**Next Steps:**
+**Extend This Workshop:**
 1. Add time-based filtering (`WHERE created_at > NOW() - INTERVAL '7 days'`)
-2. Implement query caching with Redis/ElastiCache
-3. Add A/B testing for reranking strategies
-4. Build custom MCP tools for your domain
-5. Integrate with Amazon Kendra for document search
+2. Implement query caching (Redis/ElastiCache)
+3. Build custom MCP tools for your domain
+4. Integrate with Amazon Kendra
 
 **Production Checklist:**
-- [ ] HNSW indexes on all vector columns
-- [ ] GIN indexes on tsvector and trigram columns
+- [ ] HNSW indexes on vector columns
+- [ ] GIN indexes on tsvector/trigram columns
 - [ ] Connection pooling (PgBouncer/RDS Proxy)
-- [ ] Query result caching
-- [ ] RLS policies for all tables
-- [ ] IAM authentication for Data API
+- [ ] RLS policies and IAM authentication
 - [ ] Audit logging enabled
 
 ---
