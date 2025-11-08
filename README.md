@@ -74,7 +74,7 @@ cd /notebooks
 
 ---
 
-### Interactive Demo: MCP-Based Retrieval (20 min)
+### Interactive Demo: MCP-Based Retrieval (10 min)
 
 **Explore MCP-enabled context-aware search:**
 
