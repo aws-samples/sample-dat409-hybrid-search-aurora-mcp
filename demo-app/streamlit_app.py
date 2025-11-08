@@ -1568,7 +1568,7 @@ with tab1:
             ("Analytics", "🔒 Restricted")
         ],
         'product_manager': [
-            ("Analytics", "✅ Analytics"),
+            ("Analytics", "✅ All Access"),
             ("Defect rate", "✅ Defect Analysis"),
             ("Warranty", "✅ All Access"),
             ("Firmware", "✅ All Access"),
