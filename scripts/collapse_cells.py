@@ -16,11 +16,20 @@ def collapse_cells_in_notebook(notebook_path: Path, cell_indices: list[int]) -> 
     for idx in cell_indices:
         if idx < len(notebook['cells']):
             cell = notebook['cells'][idx]
+            # Only collapse code cells, not markdown
+            if cell['cell_type'] != 'code':
+                print(f"⚠️  Skipped cell {idx} (not a code cell)")
+                continue
+            
             if 'metadata' not in cell:
                 cell['metadata'] = {}
+            
+            # Add both metadata fields for compatibility
             if 'jupyter' not in cell['metadata']:
                 cell['metadata']['jupyter'] = {}
             cell['metadata']['jupyter']['source_hidden'] = True
+            cell['metadata']['collapsed'] = True
+            
             print(f"✅ Collapsed cell {idx} in {notebook_path.name}")
     
     with open(notebook_path, 'w') as f:
@@ -29,13 +38,13 @@ def collapse_cells_in_notebook(notebook_path: Path, cell_indices: list[int]) -> 
 if __name__ == "__main__":
     notebooks_dir = Path(__file__).parent.parent / "notebooks"
     
-    # TODO notebook - collapse setup and verification cells
+    # TODO notebook - only cells with COLLAPSED markers
     todo_notebook = notebooks_dir / "01-dat409-hybrid-search-TODO.ipynb"
-    todo_collapse_indices = [4, 6, 14, 28]  # Step 1 setup, Step 2 verification, Step 4 UI, OPTIONAL benchmarking
+    todo_collapse_indices = [4, 6, 25, 28]  # Only cells with 📦 COLLAPSED CELL marker
     
-    # SOLUTIONS notebook - collapse setup and verification cells  
+    # SOLUTIONS notebook - only cells with COLLAPSED markers
     solutions_notebook = notebooks_dir / "02-dat409-hybrid-search-SOLUTIONS.ipynb"
-    solutions_collapse_indices = [4, 6, 14]  # Step 1 setup, Step 2 verification, Step 4 UI
+    solutions_collapse_indices = []  # No cells have COLLAPSED markers
     
     print("🔧 Collapsing cells in notebooks...\n")
     
