@@ -52,7 +52,7 @@ Build production-grade hybrid search combining semantic vectors, full-text searc
 
 ### Hands-On Lab: Hybrid Search Implementation (40 min)
 
-**Complete 3 TODO blocks implementing:**
+**Complete 3 search methods (6 TODO sections total):**
 
 | Method | Technology | Use Case |
 |--------|-----------|----------|
