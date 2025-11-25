@@ -1179,7 +1179,7 @@ def strands_agent_search(query: str, persona: str = None, use_mcp: bool = True) 
         denied_types = [ct for ct in all_content_types if ct not in PERSONAS[persona]['access_levels']]
         agent = Agent(
             tools=tools,
-            model="us.anthropic.claude-sonnet-4-20250514-v1:0",
+            model="global.anthropic.claude-sonnet-4-20250514-v1:0",
             system_prompt=f"""You are a helpful database assistant with access to Aurora PostgreSQL through MCP tools.
 
 IMPORTANT SCHEMA:
