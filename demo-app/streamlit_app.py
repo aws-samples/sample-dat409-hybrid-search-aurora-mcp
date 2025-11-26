@@ -1721,7 +1721,7 @@ with tab2:
     ]
     for idx, (q, hint) in enumerate(quick_queries):
         with quick_cols[idx]:
-            if st.button(f"{hint}\n{q}", key=f"search_quick_{idx}"):
+            if st.button(f"{hint} {q}", key=f"search_quick_{idx}", use_container_width=True):
                 st.session_state.comparison_query = q
                 st.rerun()
     
@@ -1946,37 +1946,179 @@ with tab2:
 
 with tab3:
     st.markdown("### 🔬 Advanced Analysis & Optimization")
-    st.caption("🎯 Deep dive into query analysis, result overlap, and index configuration")
+    st.caption("🎯 Deep dive into query planning, index statistics, and production optimization")
     
     st.info("ℹ️ **Note:** This tab is optional and not required for completing the workshop labs. It provides additional technical insights for those interested in production optimization and algorithm internals.")
     
     st.markdown("---")
     
-    # Section 1: Query Analysis (Condensed)
-    st.markdown("---")
-    st.markdown("## 🧠 Query Analysis")
+    # Section 1: Live Query Analysis
+    st.markdown("## 🧠 Query Analysis & Recommendations")
     
-    if 'comparison_query' in st.session_state and st.session_state.comparison_query:
+    if 'comparison_query' in st.session_state and st.session_state.comparison_query and st.session_state.last_results:
         search_query = st.session_state.comparison_query
+        results_data = st.session_state.last_results
+        timings_data = st.session_state.last_timings
+        
+        # Query characteristics
         word_count = len(search_query.split())
+        char_count = len(search_query)
+        has_numbers = any(c.isdigit() for c in search_query)
+        has_special = any(c in '!@#$%^&*()' for c in search_query)
         
-        # Recommended search method
-        if word_count == 1:
-            recommendation = "**Fuzzy Search** - Single word benefits from typo tolerance"
-        elif word_count <= 3:
-            recommendation = "**Keyword Search** - Short queries work well with full-text search"
-        elif word_count > 3:
-            recommendation = "**Semantic Search** - Long phrases capture intent with embeddings"
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Words", word_count)
+        with col2:
+            st.metric("Characters", char_count)
+        with col3:
+            st.metric("Has Numbers", "✅" if has_numbers else "❌")
+        with col4:
+            st.metric("Special Chars", "✅" if has_special else "❌")
+        
+        # Intelligent recommendation based on query patterns
+        st.markdown("### 🎯 Recommended Search Strategy")
+        
+        query_lower = search_query.lower()
+        
+        # Detect typos (repeated chars, common misspellings)
+        has_typos = bool(re.search(r'\bwireles\b|\bhedphones\b|\blabtop\b|\bcamra\b', query_lower))
+        
+        # Conceptual/qualitative terms
+        conceptual_keywords = ['affordable', 'cheap', 'expensive', 'best', 'good', 'quality', 'eco-friendly', 
+                               'durable', 'reliable', 'premium', 'budget', 'professional', 'beginner']
+        has_conceptual = any(word in conceptual_keywords for word in query_lower.split())
+        
+        # Constraint indicators (price, size, etc.)
+        has_constraints = bool(re.search(r'under|below|above|over|between', query_lower)) or (has_numbers and has_conceptual)
+        
+        # Multiple feature descriptors (suggests RRF)
+        feature_connectors = ['with', 'and', 'plus', 'including']
+        feature_count = sum(1 for word in feature_connectors if f' {word} ' in f' {query_lower} ')
+        
+        # Product-specific keywords (suggest keyword search)
+        product_keywords = ['wireless', 'bluetooth', 'usb', 'hdmi', 'led', 'lcd', 'camera', 'laptop', 'phone']
+        has_product_terms = any(word in query_lower for word in product_keywords)
+        
+        if has_typos:
+            recommendation = "**Fuzzy Search** - Typo tolerance for misspelled terms"
+            reason = "Query contains typos or misspellings. Fuzzy search handles character-level variations."
+        elif has_product_terms and not has_conceptual and word_count <= 4:
+            recommendation = "**Keyword Search** - Specific product terms"
+            reason = "Query contains specific product terms (wireless, bluetooth, etc.). Full-text search provides fast, accurate results for exact term matching."
+        elif has_numbers and not has_conceptual:
+            recommendation = "**Keyword Search** - Exact matching for SKUs/model numbers"
+            reason = "Numbers suggest product codes or model numbers requiring exact matching."
+        elif has_conceptual and has_constraints:
+            recommendation = "**Hybrid (Weighted)** - Conceptual query with constraints"
+            reason = "Query combines conceptual terms (affordable, durable) with specific constraints (under 200). Hybrid search balances semantic understanding with keyword precision."
+        elif has_conceptual and word_count <= 4:
+            recommendation = "**Semantic Search** - Intent-based conceptual query"
+            reason = "Query contains conceptual terms (eco-friendly, affordable, quality). Semantic search understands intent beyond exact keywords."
+        elif feature_count >= 1 or word_count >= 7:
+            recommendation = "**Hybrid (RRF)** - Multi-feature query benefits from fusion"
+            reason = "Query describes multiple features or is complex. RRF combines semantic, keyword, and fuzzy signals for comprehensive coverage."
+        elif word_count <= 3 and not has_conceptual:
+            recommendation = "**Keyword Search** - Short, specific query"
+            reason = "Few words with clear product terms. Full-text search provides fast, accurate results."
         else:
-            recommendation = "**Hybrid Search** - Balanced approach for mixed queries"
+            recommendation = "**Hybrid (RRF)** - Balanced approach for medium queries"
+            reason = "Medium-length query benefits from multi-signal fusion for best coverage."
         
-        st.info(f"🎯 {recommendation}")
+        st.info(f"{recommendation}\n\n{reason}")
+        
+        # Result overlap analysis
+        st.markdown("### 🔄 Result Overlap Analysis")
+        st.caption("How many products appear in multiple search methods?")
+        
+        # Calculate overlaps
+        method_products = {}
+        for method, results in results_data.items():
+            method_products[method] = set(r['productId'] for r in results)
+        
+        # Overlap matrix
+        overlap_data = []
+        methods = list(method_products.keys())
+        for m1 in methods:
+            row = {'Method': m1}
+            for m2 in methods:
+                if m1 == m2:
+                    row[m2] = len(method_products[m1])
+                else:
+                    overlap = len(method_products[m1] & method_products[m2])
+                    row[m2] = overlap
+            overlap_data.append(row)
+        
+        overlap_df = pd.DataFrame(overlap_data)
+        st.dataframe(overlap_df, hide_index=True, use_container_width=True)
+        
+        # Unique products per method
+        st.markdown("### 🎯 Unique Products by Method")
+        st.caption("Products found ONLY by this method (not in others)")
+        
+        unique_counts = {}
+        for method, products in method_products.items():
+            other_products = set()
+            for other_method, other_prods in method_products.items():
+                if other_method != method:
+                    other_products.update(other_prods)
+            unique = products - other_products
+            unique_counts[method] = len(unique)
+        
+        unique_df = pd.DataFrame([
+            {'Method': method, 'Unique Products': count, 'Percentage': f"{(count/len(method_products[method])*100):.1f}%" if len(method_products[method]) > 0 else "0%"}
+            for method, count in unique_counts.items()
+        ])
+        st.dataframe(unique_df, hide_index=True, use_container_width=True)
+        
+        st.caption("💡 High unique counts suggest methods are finding different relevant products - hybrid search captures more diversity.")
+        
     else:
-        st.info("👉 Run a search in Tab 2 to see query analysis")
+        st.info("👉 Run a search in **Tab 2: Search Comparison** to see detailed query analysis and result overlap statistics")
     
-    # Section 3: Index Configuration (Condensed)
+    # Section 2: Index Statistics
     st.markdown("---")
-    st.markdown("## 🔧 Index Configuration Quick Reference")
+    st.markdown("## 📊 Index Statistics & Health")
+    
+    try:
+        conn = get_db_connection()
+        
+        # Get index sizes and usage
+        index_stats = conn.execute("""
+            SELECT 
+                indexrelname as indexname,
+                pg_size_pretty(pg_relation_size(schemaname||'.'||indexrelname)) as size,
+                idx_scan as scans,
+                idx_tup_read as tuples_read,
+                idx_tup_fetch as tuples_fetched
+            FROM pg_stat_user_indexes
+            WHERE schemaname = 'bedrock_integration'
+              AND relname = 'product_catalog'
+            ORDER BY pg_relation_size(schemaname||'.'||indexrelname) DESC;
+        """).fetchall()
+        
+        if index_stats:
+            index_df = pd.DataFrame(index_stats, columns=['Index', 'Size', 'Scans', 'Tuples Read', 'Tuples Fetched'])
+            st.dataframe(index_df, hide_index=True, use_container_width=True)
+            
+            st.caption("""
+            **Metrics Explained:**
+            - **Size**: Disk space used by index
+            - **Scans**: Number of times index was used
+            - **Tuples Read**: Rows read from index
+            - **Tuples Fetched**: Rows actually returned (lower = more selective)
+            """)
+        else:
+            st.warning("No index statistics available")
+        
+        conn.close()
+        
+    except Exception as e:
+        st.error(f"Could not fetch index statistics: {e}")
+    
+    # Section 3: Index Configuration
+    st.markdown("---")
+    st.markdown("## 🔧 Index Configuration Deep Dive")
     
     col1, col2, col3 = st.columns(3)
     
@@ -1987,7 +2129,9 @@ USING hnsw (embedding
 vector_cosine_ops)
 WITH (m=16, 
 ef_construction=64);""")
-        st.caption("m=16: connections/layer | ef=64: build quality")
+        st.caption("**m=16**: connections per layer (higher = better recall, slower build)")
+        st.caption("**ef_construction=64**: build quality (higher = better index, slower build)")
+        st.caption("**Query time**: Set ef_search=40 for 95% recall")
     
     with col2:
         st.markdown("**Full-Text (GIN)**")
@@ -1997,7 +2141,9 @@ USING gin(
     'english', 
     description)
 );""")
-        st.caption("Stemming + stop words + ranking")
+        st.caption("**Stemming**: 'running' → 'run'")
+        st.caption("**Stop words**: Removes 'the', 'a', 'is'")
+        st.caption("**Ranking**: ts_rank_cd() for relevance")
     
     with col3:
         st.markdown("**Trigram (GIN)**")
@@ -2006,22 +2152,140 @@ USING gin(
   description 
   gin_trgm_ops
 );""")
-        st.caption("Fuzzy matching + typo tolerance")
+        st.caption("**Trigrams**: 'cat' → 'c', 'ca', 'cat', 'at', 't'")
+        st.caption("**Threshold**: pg_trgm.similarity_threshold = 0.1")
+        st.caption("**Operators**: %% (similar), % (contains)")
+    
+    # HNSW Parameter Tuning
+    with st.expander("🎛️ HNSW Parameter Tuning Guide", expanded=False):
+        st.markdown("""
+        ### Build-Time Parameters
+        
+        | Parameter | Range | Default | Impact |
+        |-----------|-------|---------|--------|
+        | **m** | 4-64 | 16 | Connections per layer. Higher = better recall, more memory |
+        | **ef_construction** | 4-1000 | 64 | Build quality. Higher = better index, slower build |
+        
+        ### Query-Time Parameters
+        
+        ```sql
+        SET hnsw.ef_search = 40;  -- Default: 40
+        ```
+        
+        | ef_search | Recall | Latency |
+        |-----------|--------|----------|
+        | 10 | ~85% | ~5ms |
+        | 40 | ~95% | ~15ms |
+        | 100 | ~99% | ~40ms |
+        | 200 | ~99.5% | ~80ms |
+        
+        ### Recommended Configurations
+        
+        **High Accuracy (User-Facing Search):**
+        ```sql
+        CREATE INDEX USING hnsw (embedding vector_cosine_ops)
+        WITH (m=32, ef_construction=128);
+        SET hnsw.ef_search = 100;
+        ```
+        
+        **Balanced (Production Default):**
+        ```sql
+        CREATE INDEX USING hnsw (embedding vector_cosine_ops)
+        WITH (m=16, ef_construction=64);
+        SET hnsw.ef_search = 40;
+        ```
+        
+        **Fast Build (Development):**
+        ```sql
+        CREATE INDEX USING hnsw (embedding vector_cosine_ops)
+        WITH (m=8, ef_construction=32);
+        SET hnsw.ef_search = 20;
+        ```
+        """)
+    
+    # Query Planning
+    st.markdown("---")
+    st.markdown("## 🔍 Query Planning & Optimization")
+    
+    with st.expander("📈 EXPLAIN ANALYZE Examples", expanded=False):
+        st.markdown("""
+        ### Semantic Search Query Plan
+        
+        ```sql
+        EXPLAIN ANALYZE
+        SELECT product_id, 1 - (embedding <=> '[...]'::vector) as similarity
+        FROM product_catalog
+        ORDER BY embedding <=> '[...]'::vector
+        LIMIT 10;
+        ```
+        
+        **Expected Plan:**
+        ```
+        Limit  (cost=X..Y rows=10) (actual time=15.234..15.456 rows=10)
+          ->  Index Scan using product_catalog_embedding_idx on product_catalog
+              (cost=X..Y rows=21704) (actual time=15.232..15.452 rows=10)
+              Order By: (embedding <=> '[...]'::vector)
+        Planning Time: 0.123 ms
+        Execution Time: 15.478 ms
+        ```
+        
+        **What to Look For:**
+        - ✅ "Index Scan using ...embedding_idx" (using HNSW)
+        - ❌ "Seq Scan" (missing index or not used)
+        - ✅ Execution time <50ms for <1M rows
+        
+        ### Hybrid Search Query Plan
+        
+        ```sql
+        EXPLAIN ANALYZE
+        WITH semantic AS (...), keyword AS (...)
+        SELECT ... FROM semantic FULL OUTER JOIN keyword ...;
+        ```
+        
+        **Expected Plan:**
+        ```
+        CTE semantic
+          ->  Index Scan using product_catalog_embedding_idx
+        CTE keyword  
+          ->  Bitmap Heap Scan on product_catalog
+                ->  Bitmap Index Scan on product_catalog_description_idx
+        Hash Full Join  (cost=X..Y)
+        ```
+        
+        **Optimization Tips:**
+        - Use LIMIT in CTEs to reduce join size
+        - Ensure both indexes are used (not Seq Scan)
+        - Monitor CTE materialization cost
+        """)
     
     st.markdown("---")
-    st.markdown("## 🚀 Quick Tuning Tips")
+    st.markdown("## 🚀 Production Optimization Checklist")
     
     st.markdown("""
     **Query Optimization:**
-    - HNSW is 10-100x faster than IVFFlat for reads
-    - Combine vector search with WHERE clauses for filtering
-    - Use EXPLAIN ANALYZE to profile slow queries
-    - Cache common query results (Redis/ElastiCache)
+    - ✅ HNSW is 10-100x faster than IVFFlat for reads
+    - ✅ Combine vector search with WHERE clauses for filtering
+    - ✅ Use EXPLAIN ANALYZE to profile slow queries
+    - ✅ Cache common query results (Redis/ElastiCache with 1-hour TTL)
+    - ✅ Set hnsw.ef_search based on accuracy requirements
     
     **Index Maintenance:**
-    - VACUUM ANALYZE after bulk updates
-    - Monitor index bloat with pg_stat_user_indexes
-    - Consider partitioning for >10M rows
+    - ✅ VACUUM ANALYZE after bulk updates (rebuilds statistics)
+    - ✅ Monitor index bloat with pg_stat_user_indexes
+    - ✅ Consider partitioning for >10M rows
+    - ✅ Rebuild HNSW indexes monthly for optimal performance
+    - ✅ Use CONCURRENTLY for zero-downtime index rebuilds
+    
+    **Connection Pooling:**
+    - ✅ Use PgBouncer or RDS Proxy (transaction mode)
+    - ✅ Set pool size = (CPU cores * 2) + effective_spindle_count
+    - ✅ Monitor connection saturation in CloudWatch
+    
+    **Monitoring:**
+    - ✅ Enable Performance Insights (1-second granularity)
+    - ✅ Track query latency p50, p95, p99
+    - ✅ Alert on index scan ratio <95%
+    - ✅ Monitor embedding generation latency (Bedrock)
     """)
 
 # TAB 4: Key Takeaways
