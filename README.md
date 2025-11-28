@@ -1,7 +1,5 @@
 # DAT409 - Hybrid Search with Aurora PostgreSQL for MCP Retrieval
 
-> ⚠️ **Educational Workshop**: This repository contains demonstration code for AWS re:Invent 2025. Not intended for production deployment without proper security hardening and testing.
-
 <div align="center">
 
 ### Platform & Infrastructure
