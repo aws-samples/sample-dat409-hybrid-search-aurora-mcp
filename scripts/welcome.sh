@@ -30,7 +30,7 @@ cat << 'EOF'
 
 EOF
 
-# Open README in preview mode
-code --command markdown.showPreview README.md
+# Open TODO notebook
+code /workshop/notebooks/01-dat409-hybrid-search-TODO.ipynb
 
 exec bash

@@ -244,6 +244,7 @@ sudo -u "$CODE_EDITOR_USER" mkdir -p "$SETTINGS_DIR/User"
 cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
 {
     "workbench.colorTheme": "Default Dark Modern",
+    "security.workspace.trust.untrustedFiles": "open",
     "security.workspace.trust.enabled": false,
     "security.workspace.trust.startupPrompt": "never",
     "security.workspace.trust.banner": "never",
@@ -321,8 +322,8 @@ cat << 'EOF'
 
 EOF
 
-# Open README in preview mode
-code --command markdown.showPreview /workshop/README.md
+# Open TODO notebook
+code /workshop/notebooks/01-dat409-hybrid-search-TODO.ipynb
 
 # THIS LINE KEEPS TERMINAL OPEN
 exec bash
@@ -360,6 +361,7 @@ TASKS_EOF
 cat > "$HOME_FOLDER/.vscode/settings.json" << 'SETTINGS_EOF'
 {
     "workbench.colorTheme": "Default Dark Modern",
+    "security.workspace.trust.untrustedFiles": "open",
     "security.workspace.trust.enabled": false,
     "security.workspace.trust.startupPrompt": "never",
     "security.workspace.trust.banner": "never",
