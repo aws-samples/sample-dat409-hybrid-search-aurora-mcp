@@ -243,6 +243,13 @@ sudo -u "$CODE_EDITOR_USER" mkdir -p "$SETTINGS_DIR/User"
 
 cat > "$SETTINGS_DIR/User/settings.json" << 'VSCODE_SETTINGS'
 {
+    "workbench.colorTheme": "Default Dark Modern",
+    "security.workspace.trust.enabled": false,
+    "security.workspace.trust.startupPrompt": "never",
+    "security.workspace.trust.banner": "never",
+    "security.workspace.trust.emptyWindow": false,
+    "editor.fontSize": 16,
+    "terminal.integrated.fontSize": 16,
     "python.defaultInterpreterPath": "/usr/bin/python3.13",
     "jupyter.kernels.filter": [
         {
@@ -280,7 +287,7 @@ log "Creating workspace configuration..."
 sudo -u "$CODE_EDITOR_USER" mkdir -p "$HOME_FOLDER/.vscode"
 sudo -u "$CODE_EDITOR_USER" mkdir -p "$HOME_FOLDER/scripts"
 
-# 1. Create welcome script that STAYS OPEN
+# 1. Create welcome script that STAYS OPEN and opens README in preview
 cat > "$HOME_FOLDER/scripts/welcome.sh" << 'WELCOME_EOF'
 #!/bin/bash
 clear
@@ -314,6 +321,9 @@ cat << 'EOF'
 
 EOF
 
+# Open README in preview mode
+code --command markdown.showPreview /workshop/README.md
+
 # THIS LINE KEEPS TERMINAL OPEN
 exec bash
 WELCOME_EOF
@@ -346,9 +356,16 @@ cat > "$HOME_FOLDER/.vscode/tasks.json" << 'TASKS_EOF'
 }
 TASKS_EOF
 
-# 3. Create workspace settings (kernel + terminal config)
+# 3. Create workspace settings (kernel + terminal config + theme + trust)
 cat > "$HOME_FOLDER/.vscode/settings.json" << 'SETTINGS_EOF'
 {
+    "workbench.colorTheme": "Default Dark Modern",
+    "security.workspace.trust.enabled": false,
+    "security.workspace.trust.startupPrompt": "never",
+    "security.workspace.trust.banner": "never",
+    "security.workspace.trust.emptyWindow": false,
+    "editor.fontSize": 16,
+    "terminal.integrated.fontSize": 16,
     "terminal.integrated.defaultProfile.linux": "bash",
     "terminal.integrated.cwd": "/workshop",
     "python.defaultInterpreterPath": "/usr/bin/python3.13",
