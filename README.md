@@ -60,6 +60,12 @@ Build production-grade hybrid search combining semantic vectors, full-text searc
 | **Semantic** | pgvector + HNSW + Cohere | Conceptual queries ("eco-friendly products") |
 | **Hybrid RRF** | Reciprocal Rank Fusion | Multi-signal fusion without ML overhead |
 
+<div align="center">
+
+![Hybrid Search Architecture](demo-app/architecture/hybrid_search.png)
+
+</div>
+
 **Hands-On:**
 ```bash
 cd /notebooks
