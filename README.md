@@ -90,6 +90,12 @@ User Query → Claude Sonnet 4 → MCP Tools → Aurora PostgreSQL
          Tool Selection        SQL Query    RLS-Filtered Results
 ```
 
+<div align="center">
+
+![Streamlit MCP Architecture](demo-app/architecture/streamlit.png)
+
+</div>
+
 **Hands-On:**
 ```bash
 cd /demo-app
