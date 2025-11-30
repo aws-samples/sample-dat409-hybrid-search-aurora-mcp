@@ -62,7 +62,7 @@ Build production-grade hybrid search combining semantic vectors, full-text searc
 
 <div align="center">
 
-![Hybrid Search Architecture](demo-app/architecture/hybrid_search.png)
+![Hybrid Search Architecture](architecture/hybrid_search.png)
 
 </div>
 
@@ -92,7 +92,7 @@ User Query → Claude Sonnet 4 → MCP Tools → Aurora PostgreSQL
 
 <div align="center">
 
-![Streamlit MCP Architecture](demo-app/architecture/streamlit.png)
+![Streamlit MCP Architecture](architecture/streamlit.png)
 
 </div>
 
