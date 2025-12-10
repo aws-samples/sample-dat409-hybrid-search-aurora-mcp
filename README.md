@@ -29,6 +29,20 @@ Build production-grade hybrid search combining semantic vectors, full-text searc
 - MCP-based agent with intelligent database querying
 - Context-aware filtering with Row-Level Security
 
+## Quick Video Walkthrough
+
+Short on time? Watch this video at 1.5x speed to see the demo application in action (no sound, bump up the quality to 1080p or higher).
+
+<div align="center">
+
+[![Watch the Demo](https://img.youtube.com/vi/GRYDAOlKdas/maxresdefault.jpg)](https://youtu.be/GRYDAOlKdas?si=FYQynNfOwlae3G6m)
+
+*Click the thumbnail to watch on YouTube*
+
+</div>
+
+> **Viewing Tip:** Click the settings gear icon in the video player to adjust playback speed.
+
 ## 📁 Repository Structure
 
 ```
