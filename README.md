@@ -35,7 +35,7 @@ Short on time? Watch this video at 1.5x speed to see the demo application in act
 
 <div align="center">
 
-[![Watch the Demo](https://img.youtube.com/vi/GRYDAOlKdas/maxresdefault.jpg)](https://youtu.be/GRYDAOlKdas?si=FYQynNfOwlae3G6m)
+[![DAT409 Demo](https://img.youtube.com/vi/GRYDAOlKdas/hqdefault.jpg)](https://youtu.be/GRYDAOlKdas?si=FYQynNfOwlae3G6m)
 
 *Click the thumbnail to watch on YouTube*
 
